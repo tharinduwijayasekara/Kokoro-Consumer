@@ -271,12 +271,23 @@ def extract_cover_image(epub_path: Path, output_dir: Path) -> Path | None:
     book = epub.read_epub(str(epub_path))
     cover_image_path = output_dir / "cover.jpg"
 
+    cover_image_item = None
+
     # Look for the item that is the cover
     for item in book.get_items():
         print(f"🔍 Checking item: {item.get_id()} ({item.get_type()})")
-        if item.get_type() == EPUB_IMAGE and 'cover' in item.get_id().lower():
-            with open(cover_image_path, 'wb') as f:
-                f.write(item.get_content())
+        if item.get_type() == EPUB_IMAGE:
+            if cover_image_item == None:
+                print("🔍 Found the first image in the book, using that as the cover if no other cover is found")
+                cover_image_item = item
+            
+            if 'cover' in item.get_id().lower():
+                print(f"🔍 Found specific cover image: {item.get_id()}")
+                cover_image_item = item
+                break
+    if cover_image_item:
+        with open(cover_image_path, 'wb') as f:
+            f.write(item.get_content())
             print(f"🖼️ Saved cover image: {cover_image_path.name}")
             return cover_image_path
 
