@@ -1,5 +1,5 @@
 {
-    "app_name": "Kokoro Consumer",
+    "app_name": "Kokoro Consumer - By Tharindu Wijayasekara",
     "version": "1.0.0",
     "description": "Configuration for Kokoro Consumer application.",
     "max_retries": 1,
