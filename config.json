@@ -1,0 +1,52 @@
+{
+    "app_name": "Kokoro Consumer",
+    "version": "1.0.0",
+    "description": "Configuration for Kokoro Consumer application.",
+    "max_retries": 1,
+    "logging": {
+        "level": "INFO",
+        "file": "kokoro-consumer.log"
+    },
+    "api": {
+        "host": "http://host.docker.internal:8888",
+        "endpoints": {
+            "speech": "/v1/audio/speech"
+        },
+        "timeout": 300
+    },
+    "tts_settings": {
+        "model": "kokoro",
+        "input": "<fill the text to be converted to speech>",
+        "voice": "af_bella+af_sarah+af_heart",
+        "response_format": "mp3",
+        "download_format": "mp3",
+        "speed": 1.1,
+        "stream": false,
+        "return_download_link": true,
+        "lang_code": "a",
+        "volume_multiplier": 1,
+        "normalization_options": {
+            "normalize": true,
+            "unit_normalization": true,
+            "url_normalization": true,
+            "email_normalization": true,
+            "optional_pluralization_normalization": true,
+            "phone_normalization": true,
+            "replace_remaining_symbols": true
+        }
+    },
+    "replacements": {
+        " . . . ": "...",
+        ". . . ": "...",
+        "* * *": "... ... ...",
+        "Berenike": "Béra-knee-kee",
+        "Ganelon": "Ganey-lon",
+        "Aristedes": "Aristeedees",
+        "Palekiller": "Pale-killer",
+        "McGonagall": "McGonogall",
+        "unDursleyish": "unDursleeish",
+        "Voldermort": "Voldemortt",
+        "Gryffindor": "Gryffin-door",
+        "Slytherin": "Slither-in"
+    }
+}
