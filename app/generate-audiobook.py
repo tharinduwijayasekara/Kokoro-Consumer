@@ -28,25 +28,30 @@ MAX_RETRIES = config.get("max_retries", 5)
 EPUB_DOCUMENT = 9
 EPUB_IMAGE = 1
 
-def main():
-    start_time = datetime.datetime.now()
+def main(): 
+    convert_epubs_to_audiobooks()
+
+def convert_epubs_to_audiobooks():
     current_folder = Path("/app/books")
     epub_files = list(current_folder.glob("*.epub"))
 
     if not epub_files:
         print("📁 No EPUB file found.")
         return
-    elif len(epub_files) > 1:
-        print("⚠️ Multiple EPUB files found. Only one is expected.")
-        return
 
-    epub_file = epub_files[0]
+    for epub_file in epub_files:
+        convert_epub_to_audiobook(epub_file)
+
+def convert_epub_to_audiobook(epub_file: epub):
+    start_time = datetime.datetime.now()
+    current_folder = Path("/app/books")
+    
     output_dir, timestamp = prepare_output_dir(current_folder, epub_file)
 
     print(f"📖 Processing: {epub_file.name}")
     print(f"📂 Output folder: {output_dir}")
 
-    cover_image_path = extract_cover_image(epub_file, output_dir)
+    extract_cover_image(epub_file, output_dir)
 
     paragraphs = extract_paragraphs_from_epub(epub_file)
     content_json = output_dir / "content.json" 
@@ -147,6 +152,9 @@ def prepare_output_dir(current_folder: Path, epub_file: epub.EpubBook) -> list:
     output_dir.mkdir(parents=True, exist_ok=True)
     return [output_dir, timestamp]
 
+def is_valid_paragraph(text: str) -> bool:
+    return re.search(r'[A-Za-z0-9.]', text)
+
 def extract_paragraphs_from_epub(epub_path: Path) -> list:
     book = epub.read_epub(str(epub_path))
     paragraphs = []
@@ -157,7 +165,7 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
         if item.get_type() == EPUB_DOCUMENT:
             soup = BeautifulSoup(item.get_content(), 'html.parser')
             chapter_title = soup.find(['h1', 'h2', 'h3'])
-            if chapter_title:
+            if chapter_title and is_valid_paragraph(chapter_title.get_text()):
                 para_id = f"pgrf-{counter:05d}"
                 paragraphs.append([para_id, clean_text(chapter_title.get_text()), 1, ''])
                 counter += 1
@@ -165,7 +173,7 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
                 p_class = p.get('class', [])
                 text = p.get_text().strip()
                 is_chapter = 'chapter' in p_class or 'section' in p_class or re.search(r'chapter\s+\d+', text.lower()) is not None
-                if text:
+                if text and is_valid_paragraph(text):
                     para_id = f"pgrf-{counter:05d}"
                     paragraphs.append([para_id, clean_text(text), 1 if is_chapter else 0, ''])
                     counter += 1
@@ -220,7 +228,7 @@ def generate_audio_from_text(text: str, output_path: Path):
             response = requests.post(KOKORO_ENDPOINT, json=params, headers=headers, timeout=300)
             response.raise_for_status()
             print(f"     📥 Response received: length={len(response.content)} bytes, type={response.headers.get('Content-Type', 'unknown')}")
-            print("     💾 About to save audio file...")
+            print(f"     💾 About to save audio file at {output_path.parent}...")
             #print("     📥 Raw response text:", response.text[:120])
 
             #result = response.json()
@@ -340,7 +348,7 @@ def chapterize_mp3s(output_dir: Path):
 
         print(f"🔗 Merging {len(group)} files into: {out_filename}")
         ffmpeg_concat_mp3s(group, out_path)
-        print(f"🎵 Saved: {out_filename}")
+        print(f"🎵 Saved: {out_filename} at {chapterized_dir}")
 
         merged_chapter_files.append(out_path)
 
