@@ -38,7 +38,7 @@
     "replacements": {
         " . . . ": "...",
         ". . . ": "...",
-        "* * *": "... ... ...",
+        "* * *": "...",
         "Berenike": "Béra-knee-kee",
         "Ganelon": "Ganey-lon",
         "Aristedes": "Aristeedees",
@@ -47,6 +47,9 @@
         "unDursleyish": "unDursleeish",
         "Voldermort": "Voldemortt",
         "Gryffindor": "Gryffin-door",
-        "Slytherin": "Slither-in"
+        "Slytherin": "Slither-in",
+        "Extrasolarian": "Extrasølàrian",
+        "Delos": "Dë-lòss",
+        "Selene": "Seleene"
     }
 }
