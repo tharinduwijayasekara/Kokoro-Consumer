@@ -128,7 +128,7 @@ def convert_epub_to_audiobook(epub_file: epub):
 
 def prepare_output_dir(current_folder: Path, epub_file: epub.EpubBook) -> list:
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    base_name = re.sub(r'[^A-Za-z0-9_\- ]+', '', epub_file.stem)
+    base_name = re.sub(r'[^A-Za-z0-9_.\- ]+', '', epub_file.stem)
     print(f"📂 Preparing output directory for: {base_name}")
 
     base_name = re.sub(r'[\s_]+', '-', base_name)
@@ -335,15 +335,16 @@ def chapterize_mp3s(output_dir: Path):
     merged_chapter_files = []
 
     for idx, (chapter_name, group) in enumerate(chapters):
-        chapter_id = f"section-{idx+1:03d}"
+        chapter_id = f"{idx+1:03d}"
         
         base_title = '-'.join(Path(chapter_name).stem.split('-')[3:]) if chapter_name else chapter_id
         base_title = re.sub(r'[^A-Za-z0-9\-]+', '', base_title)
         
         if base_title.isdigit():
-            base_title = f"chapter-{base_title}"
+            base_title = f"Chapter-{base_title}"
         
-        out_filename = f"{chapter_id}-{base_title}.mp3"
+        out_filename = (f"{chapter_id}-{base_title}").toupper()
+        out_filename = f"{out_filename}.mp3"
         out_path = chapterized_dir / out_filename
 
         print(f"🔗 Merging {len(group)} files into: {out_filename}")
