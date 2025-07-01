@@ -354,7 +354,7 @@ def chapterize_mp3s(output_dir: Path):
         if base_title.isdigit():
             base_title = f"Chapter-{base_title}"
         
-        out_filename = (f"{chapter_id}-{base_title}").toupper()
+        out_filename = (f"{chapter_id}-{base_title}").upper()
         out_filename = f"{out_filename}.mp3"
         out_path = chapterized_dir / out_filename
 
