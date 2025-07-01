@@ -120,7 +120,7 @@ def convert_epub_to_audiobook(epub_file: epub):
 
     content_json.write_text(json.dumps(content_data, indent=4, ensure_ascii=False))     
 
-    if "--m4b" in sys.argv:
+    if "--chapterize" in sys.argv:
         print("📚 Chapterizing MP3 files...")
         chapterize_mp3s(output_dir)
 
@@ -184,6 +184,8 @@ def clean_text(text: str) -> str:
     text = re.sub(r'\n+', '\n', text)  # Collapse multiple newlines into a single newline
     text = re.sub(r'\s+', ' ', text)  # Collapse all multiple spaces into a single space
 
+    text = fix_word_number_dash(text)  # Fix word-number dash issues
+
     # Apply replacements from config if available
     replacements = config.get("replacements", {})
     if replacements:
@@ -196,6 +198,12 @@ def apply_replacements(text: str, replacements: dict) -> str:
     for key, value in replacements.items():
         text = text.replace(key, value)
     return text
+
+def fix_word_number_dash(text):
+    # This pattern matches words followed by a dash and a number
+    pattern = r'\b([A-Za-z]+)-(\d+)\b'
+    # Replace with word space number
+    return re.sub(pattern, r'\1 \2', text)
 
 def generate_audio_from_text(text: str, output_path: Path):
     for attempt in range(1, MAX_RETRIES + 1):
