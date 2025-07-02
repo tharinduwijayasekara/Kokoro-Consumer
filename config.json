@@ -1,8 +1,8 @@
 {
-    "app_name": "Kokoro Consumer - By Tharindu Wijayasekara",
+    "app_name": "Kokoro Consumer",
     "version": "1.0.0",
     "description": "Configuration for Kokoro Consumer application.",
-    "max_retries": 5,
+    "max_retries": 1,
     "logging": {
         "level": "INFO",
         "file": "kokoro-consumer.log"
@@ -37,19 +37,10 @@
     },
     "replacements": {
         " . . . ": "...",
-        ". . . ": "...",
-        "* * *": "...",
-        "Berenike": "Béra-knee-kee",
+        "* * *": "... ... ...",
+        "Berenike": "Beraneekae",
         "Ganelon": "Ganey-lon",
         "Aristedes": "Aristeedees",
-        "Palekiller": "Pale-killer",
-        "McGonagall": "McGonogall",
-        "unDursleyish": "unDursleeish",
-        "Voldermort": "Voldemortt",
-        "Gryffindor": "Gryffin-door",
-        "Slytherin": "Slither-in",
-        "Extrasolarian": "Extrasølàrian",
-        "Delos": "Dë-lòss",
-        "Selene": "Seleene"
+        "Palekiller": "Pale-killer"
     }
 }
