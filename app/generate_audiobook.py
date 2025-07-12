@@ -1,4 +1,7 @@
+import io
 import sys
+
+from mutagen.mp3 import MP3
 
 from text_processor import extract_paragraphs_from_epub
 
@@ -77,6 +80,7 @@ def convert_epub_to_audiobook(epub_file: epub):
     total = len(paragraphs)
     remaining = total
     current = 0
+    cumulative_duration = 0
 
     for paragraph in paragraphs:
         para_id = paragraph[0]
@@ -104,7 +108,10 @@ def convert_epub_to_audiobook(epub_file: epub):
             remaining -= 1
             continue
 
-        generate_audio_from_text(text_content, audio_file_path)
+        duration = generate_audio_from_text(text_content, audio_file_path)
+        cumulative_duration = cumulative_duration + duration
+        paragraph[5] = duration
+        paragraph[6] = cumulative_duration
 
         current += 1
         elapsed_time = datetime.datetime.now() - start_time
@@ -113,7 +120,7 @@ def convert_epub_to_audiobook(epub_file: epub):
         percent = round((completed / total) * 100)
 
         print(
-            f"🔊 {audio_file} ({completed}/{total}) ({percent}%) - Elapsed: {elapsed_time} | Estimated time left: {time_left} | {remaining} at start")
+            f"🔊 {audio_file} ({completed}/{total}) ({percent}%) duration: {seconds_to_hms(cumulative_duration)} - Elapsed: {elapsed_time} | Estimated time left: {time_left} | {remaining} at start")
         print("=" * os.get_terminal_size().columns)
         term_width = os.get_terminal_size().columns
         bar_length = term_width - 8  # Reserve space for " 100%" and brackets
@@ -137,6 +144,11 @@ def convert_epub_to_audiobook(epub_file: epub):
 
     print("🎉 Done!")
 
+def seconds_to_hms(seconds):
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    return f"{hours:02}:{minutes:02}:{secs:02}"
 
 def prepare_output_dir(current_folder: Path, epub_file: epub.EpubBook) -> list:
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -220,8 +232,11 @@ def generate_audio_from_text(text: str, output_path: Path):
             with open(output_path, 'wb') as f:
                 f.write(response.content)
 
-            print(f"✅ Audio saved: {output_path.name}")
-            return
+            audio = MP3(io.BytesIO(response.content))
+            duration = int(audio.info.length)
+
+            print(f"✅ Audio saved: {output_path.name} duration: {duration} seconds")
+            return duration
 
         except Exception as e:
             print(f"⚠️ Attempt {attempt} failed: {e}")
@@ -231,6 +246,8 @@ def generate_audio_from_text(text: str, output_path: Path):
             wait_time = 5 * 2 ** (attempt - 1)
             print(f"⏳ Retrying in {wait_time} seconds...")
             time.sleep(wait_time)
+
+    return 0
 
 
 def convert_all_caps_to_sentence_case(text: str) -> str:
