@@ -1,4 +1,7 @@
 import sys
+
+from text_processor import extract_paragraphs_from_epub
+
 sys.stdout.reconfigure(line_buffering=True)
 
 import os
@@ -15,7 +18,6 @@ from ebooklib import epub
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 
-
 # Load config
 CONFIG_PATH = Path("/app/config.json")
 if not CONFIG_PATH.exists():
@@ -27,9 +29,16 @@ TTS_SETTINGS = config.get("tts_settings", {})
 MAX_RETRIES = config.get("max_retries", 5)
 EPUB_DOCUMENT = 9
 EPUB_IMAGE = 1
+EPUB_IMAGE_2 = 10
 
-def main(): 
+XTTS_ENDPOINT = config["xtts_api"]["host"] + config["xtts_api"]["endpoints"]["speech"]
+XTTS_SETTINGS = config.get("xtts_settings", {})
+USE_XTTS = config.get("use_xtts_service", False)
+
+
+def main():
     convert_epubs_to_audiobooks()
+
 
 def convert_epubs_to_audiobooks():
     current_folder = Path("/app/books")
@@ -42,10 +51,11 @@ def convert_epubs_to_audiobooks():
     for epub_file in epub_files:
         convert_epub_to_audiobook(epub_file)
 
+
 def convert_epub_to_audiobook(epub_file: epub):
     start_time = datetime.datetime.now()
     current_folder = Path("/app/books")
-    
+
     output_dir, timestamp = prepare_output_dir(current_folder, epub_file)
 
     print(f"📖 Processing: {epub_file.name}")
@@ -54,7 +64,7 @@ def convert_epub_to_audiobook(epub_file: epub):
     extract_cover_image(epub_file, output_dir)
 
     paragraphs = extract_paragraphs_from_epub(epub_file)
-    content_json = output_dir / "content.json" 
+    content_json = output_dir / "content.json"
 
     print("📝 Paragraphs extracted:")
     for para in paragraphs:
@@ -64,7 +74,7 @@ def convert_epub_to_audiobook(epub_file: epub):
 
     print(f"✏️ Converting {len(paragraphs)} paragraphs to audio parts...")
 
-    total = len(paragraphs);
+    total = len(paragraphs)
     remaining = total
     current = 0
 
@@ -81,7 +91,7 @@ def convert_epub_to_audiobook(epub_file: epub):
             chapter_title = re.sub(r'[^A-Za-z0-9 ]+', '', chapter_title)
             chapter_title = chapter_title.replace(' ', '-')
             chapter_title = f"-{chapter_title}"
-        else :
+        else:
             None
 
         audio_file = f"{audio_file_prefix}{chapter_title}.mp3"
@@ -95,14 +105,15 @@ def convert_epub_to_audiobook(epub_file: epub):
             continue
 
         generate_audio_from_text(text_content, audio_file_path)
-        
+
         current += 1
         elapsed_time = datetime.datetime.now() - start_time
         time_left = (elapsed_time / current) * (remaining - current)
         completed = total - remaining + current
         percent = round((completed / total) * 100)
 
-        print(f"🔊 {audio_file} ({completed}/{total}) ({percent}%) - Elapsed: {elapsed_time} | Estimated time left: {time_left} | {remaining} at start")
+        print(
+            f"🔊 {audio_file} ({completed}/{total}) ({percent}%) - Elapsed: {elapsed_time} | Estimated time left: {time_left} | {remaining} at start")
         print("=" * os.get_terminal_size().columns)
         term_width = os.get_terminal_size().columns
         bar_length = term_width - 8  # Reserve space for " 100%" and brackets
@@ -118,13 +129,14 @@ def convert_epub_to_audiobook(epub_file: epub):
         "paragraphs": paragraphs
     }
 
-    content_json.write_text(json.dumps(content_data, indent=4, ensure_ascii=False))     
+    content_json.write_text(json.dumps(content_data, indent=4, ensure_ascii=False))
 
     if "--chapterize" in sys.argv:
         print("📚 Chapterizing MP3 files...")
         chapterize_mp3s(output_dir)
 
     print("🎉 Done!")
+
 
 def prepare_output_dir(current_folder: Path, epub_file: epub.EpubBook) -> list:
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -152,105 +164,58 @@ def prepare_output_dir(current_folder: Path, epub_file: epub.EpubBook) -> list:
     output_dir.mkdir(parents=True, exist_ok=True)
     return [output_dir, timestamp]
 
-def is_valid_paragraph(text: str) -> bool:
-    return re.search(r'[A-Za-z0-9.]', text)
-
-def extract_paragraphs_from_epub(epub_path: Path) -> list:
-    book = epub.read_epub(str(epub_path))
-    paragraphs = []
-    counter = 1
-
-    for item in book.get_items():
-
-        if item.get_type() == EPUB_DOCUMENT:
-            soup = BeautifulSoup(item.get_content(), 'html.parser')
-            chapter_title = soup.find(['h1', 'h2', 'h3'])
-            if chapter_title and is_valid_paragraph(chapter_title.get_text()):
-                para_id = f"pgrf-{counter:05d}"
-                paragraphs.append([para_id, clean_text(chapter_title.get_text()), 1, ''])
-                counter += 1
-            for p in soup.find_all('p'):
-                p_class = p.get('class', [])
-                text = p.get_text().strip()
-                is_chapter = 'chapter' in p_class or 'section' in p_class or re.search(r'chapter\s+\d+', text.lower()) is not None
-                if text and is_valid_paragraph(text):
-                    para_id = f"pgrf-{counter:05d}"
-                    paragraphs.append([para_id, clean_text(text), 1 if is_chapter else 0, ''])
-                    counter += 1
-    return paragraphs
-
-def clean_text(text: str) -> str:
-    text = text.strip()
-    text = re.sub(r'\n+', '\n', text)  # Collapse multiple newlines into a single newline
-    text = re.sub(r'\s+', ' ', text)  # Collapse all multiple spaces into a single space
-
-    text = fix_word_number_dash(text)  # Fix word-number dash issues
-
-    # Apply replacements from config if available
-    replacements = config.get("replacements", {})
-    if replacements:
-        text = apply_replacements(text, replacements)
-
-    return text
-
-def apply_replacements(text: str, replacements: dict) -> str:
-    #Replace all occurrences of keys in `replacements` with their corresponding values in the text.
-    for key, value in replacements.items():
-        text = text.replace(key, value)
-    return text
-
-def fix_word_number_dash(text):
-    # This pattern matches words followed by a dash and a number
-    pattern = r'\b([A-Za-z]+)-(\d+)\b'
-    # Replace with word space number
-    return re.sub(pattern, r'\1 \2', text)
 
 def generate_audio_from_text(text: str, output_path: Path):
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             params = TTS_SETTINGS
+            xtts_params = XTTS_SETTINGS
+
+            params = xtts_params if USE_XTTS else params
 
             text = convert_all_caps_to_sentence_case(text)
-            params.update({"input": text})
-
             word_count = len(text.split());
 
-            if (word_count < 5):
-                params.update({"speed": 0.9})
+            if (True):
+                if (word_count < 5 and not text.strip().endswith("...")):
+                    text = f"{text}..."
+                    params.update({"speed": 1.0})
 
-            if (word_count < 15): 
-                params.update({"speed": 1.0})
-
-            if (word_count >= 15):
-                params.update({"speed": 1.1})
+            params.update({"input": text})
+            params.update({"text": text})
 
             headers = {
                 "accept": "application/json",
                 "Content-Type": "application/json"
             }
 
+            endpoint = KOKORO_ENDPOINT
+            endpoint = XTTS_ENDPOINT if USE_XTTS else endpoint
+
             print("\n" * 5)
-            print(f"🔊 Sending request to Kokoro TTS: {KOKORO_ENDPOINT}")
-            print(f"     voice: {params.get('voice', '')} | speed: {params.get('speed', '')} | input: {params.get('input', '')[:120]}")
+            print(f"🔊 Sending request to Kokoro TTS: {endpoint}")
+            print(
+                f"     voice: {params.get('voice', '')} | speed: {params.get('speed', '')} | input: {params.get('input', '')[:120]}")
 
-            response = requests.post(KOKORO_ENDPOINT, json=params, headers=headers, timeout=300)
+            response = requests.post(endpoint, json=params, headers=headers, timeout=300)
             response.raise_for_status()
-            print(f"     📥 Response received: length={len(response.content)} bytes, type={response.headers.get('Content-Type', 'unknown')}")
+            print(
+                f"     📥 Response received: length={len(response.content)} bytes, type={response.headers.get('Content-Type', 'unknown')}")
             print(f"     💾 About to save audio file at {output_path.parent}...")
-            #print("     📥 Raw response text:", response.text[:120])
+            # print("     📥 Raw response text:", response.text[:120])
 
-            #result = response.json()
-            #print(result)
+            # result = response.json()
+            # print(result)
 
-            #print("🔊 Kokoro TTS response:")
-            #print(json.dumps(result, indent=2, ensure_ascii=False))
+            # print("🔊 Kokoro TTS response:")
+            # print(json.dumps(result, indent=2, ensure_ascii=False))
 
-            #if not result.get("success"):
+            # if not result.get("success"):
             #    raise Exception("Kokoro TTS responded with success=False")
 
-            #download_url = result["data"]["downloadUrl"]
-            #audio_response = requests.get(download_url, timeout=10)
-            #audio_response.raise_for_status()
+            # download_url = result["data"]["downloadUrl"]
+            # audio_response = requests.get(download_url, timeout=10)
+            # audio_response.raise_for_status()
 
             with open(output_path, 'wb') as f:
                 f.write(response.content)
@@ -262,18 +227,20 @@ def generate_audio_from_text(text: str, output_path: Path):
             print(f"⚠️ Attempt {attempt} failed: {e}")
             if attempt == MAX_RETRIES:
                 print("❌ Max retries reached. Skipping this paragraph.")
-                #exit(1)  # Exit with error code
+                # exit(1)  # Exit with error code
             wait_time = 5 * 2 ** (attempt - 1)
             print(f"⏳ Retrying in {wait_time} seconds...")
             time.sleep(wait_time)
+
 
 def convert_all_caps_to_sentence_case(text: str) -> str:
     def replacer(match):
         word = match.group(0)
         return word.capitalize()
-    
+
     # Match words with ALL uppercase letters, minimum 2 characters (to avoid "I")
     return re.sub(r'\b[A-Z]{2,}\b', replacer, text)
+
 
 def extract_cover_image(epub_path: Path, output_dir: Path) -> Path | None:
     book = epub.read_epub(str(epub_path))
@@ -283,24 +250,27 @@ def extract_cover_image(epub_path: Path, output_dir: Path) -> Path | None:
 
     # Look for the item that is the cover
     for item in book.get_items():
-        print(f"🔍 Checking item: {item.get_id()} ({item.get_type()})")
-        if item.get_type() == EPUB_IMAGE:
+        print(f"🔍 Checking item: {item.get_id()} ({item.get_type()}) ({item.get_name()})")
+        if item.get_type() == EPUB_IMAGE or item.get_type() == EPUB_IMAGE_2:
             if cover_image_item == None:
-                print("🔍 Found the first image in the book, using that as the cover if no other cover is found")
+                print(
+                    "🔍 Found the first image in the book, using that as the cover if no other cover is found")
                 cover_image_item = item
-            
+
             if 'cover' in item.get_id().lower():
                 print(f"🔍 Found specific cover image: {item.get_id()}")
                 cover_image_item = item
                 break
+
     if cover_image_item:
         with open(cover_image_path, 'wb') as f:
-            f.write(item.get_content())
+            f.write(cover_image_item.get_content())
             print(f"🖼️ Saved cover image: {cover_image_path.name}")
             return cover_image_path
 
     print("❌ No cover image found in EPUB.")
     return None
+
 
 def chapterize_mp3s(output_dir: Path):
     print("🔍 Scanning MP3 files to merge into chapters...")
@@ -315,7 +285,7 @@ def chapterize_mp3s(output_dir: Path):
     chapterized_dir.mkdir(parents=True, exist_ok=True)
 
     m4b_dir = chapterized_dir / "m4b"
-    #m4b_dir.mkdir(parents=True, exist_ok=True)
+    # m4b_dir.mkdir(parents=True, exist_ok=True)
 
     mp3_files = sorted(output_dir.glob("adbk-*.mp3"))
     chapters = []
@@ -348,20 +318,21 @@ def chapterize_mp3s(output_dir: Path):
     if not chapters:
         print("❌ No chapters found to merge. Nothing to do.")
         return
-    
+
     print("🔗 About to merge chapters into single audio files...")
 
     merged_chapter_files = []
 
     for idx, (chapter_name, group) in enumerate(chapters):
-        chapter_id = f"{idx+1:03d}"
-        
-        base_title = '-'.join(Path(chapter_name).stem.split('-')[3:]) if chapter_name else chapter_id
+        chapter_id = f"{idx + 1:03d}"
+
+        base_title = '-'.join(
+            Path(chapter_name).stem.split('-')[3:]) if chapter_name else chapter_id
         base_title = re.sub(r'[^A-Za-z0-9\-]+', '', base_title)
-        
+
         if base_title.isdigit():
             base_title = f"Chapter-{base_title}"
-        
+
         out_filename = (f"{chapter_id}-{base_title}").upper()
         out_filename = f"{out_filename}.mp3"
         out_path = chapterized_dir / out_filename
@@ -410,6 +381,7 @@ def chapterize_mp3s(output_dir: Path):
         else:
             print(f"❌ Failed to generate M4B. Command was:\n{ffmpeg_cmd}")
 
+
 def ffmpeg_concat_mp3s(mp3_files, output_path):
     list_file = output_path.with_suffix(".txt")
     with open(list_file, "w") as f:
@@ -429,7 +401,8 @@ def ffmpeg_concat_mp3s(mp3_files, output_path):
 
     list_file.unlink(missing_ok=True)  # Clean up the list file after use
 
-#================================================================================================================
+
+# ================================================================================================================
 
 if __name__ == "__main__":
     main()
