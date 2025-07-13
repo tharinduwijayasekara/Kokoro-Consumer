@@ -17,4 +17,4 @@ RUN adduser --disabled-password --gecos "" --uid 1000 ttsuser
 # Switch to the new user
 USER ttsuser
 
-#CMD ["python", "/app/app/generate_audiobook.py"]
+#CMD ["python", "-u", "/app/app/generate_audiobook.py"]

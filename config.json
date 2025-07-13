@@ -18,6 +18,7 @@
         "model": "kokoro",
         "input": "<fill the text to be converted to speech>",
         "voice": "af_heart+af_sarah+af_bella+ef_dora",
+        "--voice": "am_michael+am_fenrir+am_michael+bm_lewis",
         "response_format": "mp3",
         "download_format": "mp3",
         "speed": 1.05,
@@ -38,8 +39,11 @@
     "replacements": {
         " . . . ": "...",
         ". . . ": "...",
+        "....": "...",
         "* * *": "...",
-        " — ": "—",
+        " — ": "...",
+        "*": "...",
+        "OceanofPDF.com": "...",
         "Berenike": "Béra-knee-kee",
         "Ganelon": "Ganey-lon",
         "Aristedes": "Aristeedees",
@@ -53,5 +57,17 @@
         "Delos": "Dë-lòss",
         "Selene": "Seleene"
     },
-    "test": "test"
+    "xtts_api": {
+        "host": "http://host.docker.internal:8020",
+        "endpoints": {
+            "speech": "/tts_to_audio"
+        },
+        "timeout": 300
+    },
+    "xtts_settings": {
+        "text": "string",
+        "speaker_wav": "kokoro.wav",
+        "language": "en"
+    },
+    "use_xtts_service": false
 }
