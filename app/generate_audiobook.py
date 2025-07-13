@@ -108,7 +108,10 @@ def convert_epub_to_audiobook(epub_file: epub):
             remaining -= 1
             continue
 
-        duration = generate_audio_from_text(text_content, audio_file_path)
+        duration = 0
+        if "--dry-run" not in sys.argv:
+            duration = generate_audio_from_text(text_content, audio_file_path)
+
         cumulative_duration = cumulative_duration + duration
         paragraph[5] = duration
         paragraph[6] = cumulative_duration

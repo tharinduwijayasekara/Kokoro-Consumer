@@ -36,13 +36,14 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
             soup = BeautifulSoup(item.get_content(), 'html.parser')
 
             chapter_text = ''
+            found_in_p_tag = None
             chapter_title = soup.find(['h1', 'h2', 'h3'])
 
             if chapter_title and is_valid_paragraph(chapter_title.get_text()):
                 chapter_text = chapter_title.get_text()
 
             if chapter_text == '':
-                chapter_text = find_chapter_from_p_tags(soup)
+                [chapter_text, found_in_p_tag] = find_chapter_from_p_tags(soup)
 
             if chapter_text == '':
                 chapter_text = f"Section {section_counter}"
@@ -65,6 +66,9 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
             counter += 1
 
             for p in soup.find_all('p'):
+                if found_in_p_tag and p == found_in_p_tag:
+                    continue
+
                 text = p.get_text().strip()
                 if text and is_valid_paragraph(text):
                     para_id = f"pgrf-{counter:05d}"
@@ -74,7 +78,7 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
                         clean_text(italics_safe_text),
                         0,
                         '',
-                        italics_safe_text,
+                        clean_text(italics_safe_text, True),
                         0,
                         0
                     ])
@@ -84,8 +88,9 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
     return paragraphs
 
 
-def find_chapter_from_p_tags(soup: BeautifulSoup) -> str | None:
+def find_chapter_from_p_tags(soup: BeautifulSoup) -> list:
     chapter_title = ''
+    found_in_p_tag = None
 
     for p in soup.find_all('p'):
         p_class = p.get('class', [])
@@ -99,26 +104,31 @@ def find_chapter_from_p_tags(soup: BeautifulSoup) -> str | None:
 
         if is_chapter:
             chapter_title = text
+            found_in_p_tag = p
             break
 
-    return chapter_title
+    return [chapter_title, found_in_p_tag]
 
 
 def is_valid_paragraph(text: str) -> bool:
     return re.search(r'[A-Za-z0-9.]', text)
 
 
-def clean_text(text: str) -> str:
+def clean_text(text: str, for_display: bool = False) -> str:
     text = text.strip()
     text = re.sub(r'\n+', '\n', text)  # Collapse multiple newlines into a single newline
     text = re.sub(r'\s+', ' ', text)  # Collapse all multiple spaces into a single space
 
-    text = fix_word_number_dash(text)  # Fix word-number dash issues
+    if not for_display:
+        text = fix_word_number_dash(text)  # Fix word-number dash issues
 
-    # Apply replacements from config if available
-    replacements = config.get("replacements", {})
-    if replacements:
-        text = apply_replacements(text, replacements)
+        # Apply replacements from config if available
+        replacements = config.get("replacements", {})
+        if replacements:
+            text = apply_replacements(text, replacements)
+
+        text = re.sub(r'\s*\.(\s*\.)+\s*', '... ', text) # Collapse groups of any combo of multiple periods to one "..."
+        text = re.sub(r'^\.\.\.\s', "", text) #Remove leading "... " from text
 
     return text
 
@@ -138,10 +148,16 @@ def fix_word_number_dash(text):
 
 def extract_text_with_italics(p):
     parts = []
+    detected=False
 
     for elem in p.descendants:
         if isinstance(elem, NavigableString):
-            parts.append(str(elem))
+            last_part_idx = len(parts) - 1
+            elem_string = str(elem)
+            if last_part_idx < 0:
+                parts.append(elem_string)
+            if last_part_idx >= 0 and parts[last_part_idx] != f"*{elem_string}*":
+                parts.append(elem_string)
         elif isinstance(elem, Tag):
             is_italic = (
                     elem.name in ['i', 'em'] or
@@ -150,5 +166,11 @@ def extract_text_with_italics(p):
             if is_italic:
                 inner = elem.get_text()
                 parts.append(f"*{inner}*")
+                detected=True
 
-    return ''.join(parts).strip()
+    processed = ''.join(parts).strip()
+
+    if detected:
+        print("Italics detected: ", p, processed)
+
+    return processed
