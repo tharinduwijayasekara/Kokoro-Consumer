@@ -195,6 +195,8 @@ def generate_audio_from_text(text: str, output_path: Path):
                 if (word_count < 5 and not text.strip().endswith("...")):
                     text = f"{text}..."
                     params.update({"speed": 1.0})
+                else:
+                    params.update({"speed": 1.1})
 
             params.update({"input": text})
             params.update({"text": text})

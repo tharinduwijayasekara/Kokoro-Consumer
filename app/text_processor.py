@@ -161,7 +161,8 @@ def extract_text_with_italics(p):
         elif isinstance(elem, Tag):
             is_italic = (
                     elem.name in ['i', 'em'] or
-                    (elem.name == 'span' and any('italic' in cls.lower() for cls in elem.get('class', [])))
+                    (elem.name == 'span' and any('italic' in cls.lower() for cls in elem.get('class', []))) or
+                    (elem.name == 'span' and any('class_s5fk' in cls.lower() for cls in elem.get('class', [])))
             )
             if is_italic:
                 inner = elem.get_text()
