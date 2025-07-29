@@ -2,7 +2,7 @@
     "app_name": "Kokoro Consumer - By Tharindu Wijayasekara",
     "version": "1.0.0",
     "description": "Configuration for Kokoro Consumer application.",
-    "max_retries": 5,
+    "max_retries": 2,
     "logging": {
         "level": "INFO",
         "file": "kokoro-consumer.log"
@@ -43,7 +43,7 @@
         "....": "...",
         "* * *": "...",
         " — ": "...",
-        "OceanofPDF.com": "",
+        "OceanofPDF.com": "ocean-of-PDF-dot-com",
         "Berenike": "Béra-knee-kee",
         "Ganelon": "Ganey-lon",
         "Aristedes": "Aristeedees",

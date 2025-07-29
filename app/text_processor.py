@@ -73,16 +73,18 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
                 if text and is_valid_paragraph(text):
                     para_id = f"pgrf-{counter:05d}"
                     italics_safe_text = extract_text_with_italics(p)
-                    paragraphs.append([
-                        para_id,
-                        clean_text(italics_safe_text),
-                        0,
-                        '',
-                        clean_text(italics_safe_text, True),
-                        0,
-                        0
-                    ])
-                    counter += 1
+                    cleaned_text = clean_text(italics_safe_text);
+                    if is_valid_paragraph(cleaned_text):
+                        paragraphs.append([
+                            para_id,
+                            clean_text(italics_safe_text),
+                            0,
+                            '',
+                            clean_text(italics_safe_text, True),
+                            0,
+                            0
+                        ])
+                        counter += 1
 
     print("Chapters:", chapter_texts)
     return paragraphs
