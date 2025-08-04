@@ -226,31 +226,14 @@ def generate_audio_from_text(text: str, output_path: Path):
 
             response = requests.post(endpoint, json=params, headers=headers, timeout=300)
             response.raise_for_status()
-            print(
-                f"     📥 Response received: length={len(response.content)} bytes, type={response.headers.get('Content-Type', 'unknown')}")
-            print(f"     💾 About to save audio file at {output_path.parent}...")
-            # print("     📥 Raw response text:", response.text[:120])
-
-            # result = response.json()
-            # print(result)
-
-            # print("🔊 Kokoro TTS response:")
-            # print(json.dumps(result, indent=2, ensure_ascii=False))
-
-            # if not result.get("success"):
-            #    raise Exception("Kokoro TTS responded with success=False")
-
-            # download_url = result["data"]["downloadUrl"]
-            # audio_response = requests.get(download_url, timeout=10)
-            # audio_response.raise_for_status()
 
             audio = MP3(io.BytesIO(response.content))
             duration = int(audio.info.length * 1000)
 
             silence_ms = 200
-            if duration > 3000: silence_ms = 400
-            if duration > 6000: silence_ms = 600
-            if duration > 9000: silence_ms = 800
+            if duration > 5000: silence_ms = 300
+            if duration > 10000: silence_ms = 500
+            if duration > 15000: silence_ms = 700
 
             final_mp3 = add_silence_with_pydub(response.content, silence_ms)
 
@@ -260,7 +243,9 @@ def generate_audio_from_text(text: str, output_path: Path):
             final_audio = MP3(io.BytesIO(final_mp3))
             final_duration = int(final_audio.info.length * 1000)
 
-            print(f"✅ Audio saved: {output_path.name} duration: {duration} ms, silence: {silence_ms}, final duration: {final_duration}")
+            print(f"     📥 Response received: length={len(response.content)} bytes, type={response.headers.get('Content-Type', 'unknown')}")
+            print(f"     💾 About to save audio file at {output_path.parent}...")
+            print(f"✅  Audio saved: {output_path.name} duration: {duration} ms, silence: {silence_ms}, final duration: {final_duration}")
             return final_duration
 
         except Exception as e:
