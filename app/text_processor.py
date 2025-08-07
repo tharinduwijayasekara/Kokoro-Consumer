@@ -21,6 +21,7 @@ if not CONFIG_PATH.exists():
     raise FileNotFoundError("Missing config.json file.")
 config = json.loads(CONFIG_PATH.read_text())
 
+USE_EDGE_TTS = config.get("use_edge_tts_service", False)
 
 def extract_paragraphs_from_epub(epub_path: Path) -> list:
     book = epub.read_epub(str(epub_path))
@@ -157,7 +158,7 @@ def clean_text(text: str, for_display: bool = False) -> str:
         text = fix_word_number_dash(text)  # Fix word-number dash issues
 
         # Apply replacements from config if available
-        replacements = config.get("replacements", {})
+        replacements = config.get("replacements", {}) if (USE_EDGE_TTS == False) else config.get("replacements_edge_tts", {})
         if replacements:
             text = apply_replacements(text, replacements)
 

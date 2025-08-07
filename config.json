@@ -18,11 +18,12 @@
         "model": "kokoro",
         "input": "<fill the text to be converted to speech>",
         "--voice": "af_heart+af_sarah+af_bella+ef_dora",
-        "voice": "af_heart(2)+af_jessica(1)+af_sky(3)",
+        "--voice": "af_heart(2)+af_jessica(1)+af_sky(3)",
+        "voice": "af_heart(2)+af_jessica(1)+af_sky(4)",
         "--voice": "am_michael+am_fenrir+am_michael+bm_lewis",
         "response_format": "mp3",
         "download_format": "mp3",
-        "speed": 1.05,
+        "speed": 1.07,
         "stream": false,
         "return_download_link": true,
         "lang_code": "a",
@@ -62,17 +63,28 @@
         "how're": "howwer",
         "Maxime": "Maxeeme"
     },
-    "xtts_api": {
-        "host": "http://host.docker.internal:8020",
+    "replacements_edge_tts": {
+        " . . . ": "...",
+        ". . . ": "...",
+        "....": "...",
+        "* * *": "...",
+        " — ": "...",
+        "OceanofPDF.com": "ocean-of-PDF-dot-com"
+    },
+    "edge_tts_api": {
+        "host": "http://host.docker.internal:5050",
         "endpoints": {
-            "speech": "/tts_to_audio"
+            "speech": "/v1/audio/speech"
         },
         "timeout": 300
     },
-    "xtts_settings": {
-        "text": "string",
-        "speaker_wav": "kokoro.wav",
-        "language": "en"
+    "edge_tts_settings": {
+        "input": "<fill the text to be converted to speech>",
+        "voice": "en-US-AvaNeural",
+        "response_format": "mp3",
+        "speed": 1.05,
+        "model": "tts-1-hd"
     },
-    "use_xtts_service": false
+    "use_edge_tts_service": true,
+    "batch_size": 5
 }

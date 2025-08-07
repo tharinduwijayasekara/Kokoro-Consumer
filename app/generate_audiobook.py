@@ -1,5 +1,6 @@
 import io
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 
 from mutagen.mp3 import MP3
@@ -36,9 +37,11 @@ EPUB_DOCUMENT = 9
 EPUB_IMAGE = 1
 EPUB_IMAGE_2 = 10
 
-XTTS_ENDPOINT = config["xtts_api"]["host"] + config["xtts_api"]["endpoints"]["speech"]
-XTTS_SETTINGS = config.get("xtts_settings", {})
-USE_XTTS = config.get("use_xtts_service", False)
+EDGE_TTS_ENDPOINT = config["edge_tts_api"]["host"] + config["edge_tts_api"]["endpoints"]["speech"]
+EDGE_TTS_SETTINGS = config.get("edge_tts_settings", {})
+USE_EDGE_TTS = config.get("use_edge_tts_service", False)
+
+BATCH_SIZE = config.get("batch_size", 5)
 
 
 def main():
@@ -83,6 +86,7 @@ def convert_epub_to_audiobook(epub_file: epub):
     remaining = total
     current = 0
     cumulative_duration = 0
+    batch = []
 
     for paragraph in paragraphs:
         para_id = paragraph[0]
@@ -105,35 +109,28 @@ def convert_epub_to_audiobook(epub_file: epub):
 
         audio_file_path = output_dir / audio_file
 
-        duration = 0
-
         if audio_file_path.exists() and audio_file_path.stat().st_size > 0:
             print(f"✅ Audio file already exists: {audio_file}")
             remaining -= 1
-
-            duration = get_mp3_duration(audio_file_path)
-
-            cumulative_duration = cumulative_duration + duration
-            paragraph[5] = duration
-            paragraph[6] = cumulative_duration
-
             continue
 
-        if "--dry-run" not in sys.argv:
-            duration = generate_audio_from_text(text_content, audio_file_path)
+        batch.append((paragraph, text_content, audio_file_path, (250 * len(batch))))
+        batch_size = len(batch)
 
-        cumulative_duration = cumulative_duration + duration
-        paragraph[5] = duration
-        paragraph[6] = cumulative_duration
+        if batch_size < BATCH_SIZE:
+            continue
 
-        current += 1
+        process_audio_batch(batch)
+        batch = []
+
+        current += batch_size
         elapsed_time = datetime.datetime.now() - start_time
         time_left = (elapsed_time / current) * (remaining - current)
         completed = total - remaining + current
         percent = round((completed / total) * 100)
 
         print(
-            f"🔊 {audio_file} ({completed}/{total}) ({percent}%) duration: {seconds_to_hms(cumulative_duration/1000)} - Elapsed: {elapsed_time} | Estimated time left: {time_left} | {remaining} at start")
+            f"🔊 {audio_file} ({completed}/{total}) (batch size:{batch_size}) ({percent}%) duration: {seconds_to_hms(cumulative_duration / 1000)} - Elapsed: {elapsed_time} | Estimated time left: {time_left} | {remaining} at start")
         print("=" * os.get_terminal_size().columns)
         term_width = os.get_terminal_size().columns
         bar_length = term_width - 8  # Reserve space for " 100%" and brackets
@@ -142,6 +139,12 @@ def convert_epub_to_audiobook(epub_file: epub):
         bar = '█' * filled_length + '-' * (bar_length - filled_length)
         print(f"<{bar}> {percent}%")
         print("=" * os.get_terminal_size().columns)
+
+    batch_size = len(batch)
+    if batch_size > 0:
+        process_audio_batch(batch)
+
+    paragraphs = compute_durations(output_dir, paragraphs)
 
     content_data = {
         "title": epub_file.stem,
@@ -157,11 +160,44 @@ def convert_epub_to_audiobook(epub_file: epub):
 
     print("🎉 Done!")
 
+
+def process_audio_batch(batch) -> int:
+    with ThreadPoolExecutor(max_workers=len(batch)) as executor:
+        future_to_para = {
+            executor.submit(generate_audio_from_text, text, path, stagger):
+                (para, path) for para, text, path, stagger in batch
+        }
+
+        for future in as_completed(future_to_para):
+            para, path = future_to_para[future]
+
+    return len(batch)
+
+
+def compute_durations(output_dir: Path, paragraphs: list) -> list:
+    cumulative_duration = 0
+
+    for paragraph in paragraphs:
+        audio_file_path = Path(output_dir / paragraph[3])
+
+        if audio_file_path.exists() and audio_file_path.stat().st_size > 0:
+            duration = get_mp3_duration(audio_file_path)
+            cumulative_duration = cumulative_duration + duration
+            print(
+                f"✅ Computing cumulative duration: {audio_file_path} {seconds_to_hms(duration / 1000)} {seconds_to_hms(cumulative_duration / 1000)}")
+
+            paragraph[5] = duration
+            paragraph[6] = cumulative_duration
+
+    return paragraphs
+
+
 def seconds_to_hms(seconds):
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
     return f"{hours:02}:{minutes:02}:{secs:02}"
+
 
 def prepare_output_dir(current_folder: Path, epub_file: epub.EpubBook) -> list:
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -171,6 +207,10 @@ def prepare_output_dir(current_folder: Path, epub_file: epub.EpubBook) -> list:
     base_name = re.sub(r'[\s_]+', '-', base_name)
     base_name = re.sub(r'-{2,}', '-', base_name)  # Replace multiple dashes with a single dash
     base_name = base_name.strip('-')  # Remove leading/trailing dashes
+
+    if USE_EDGE_TTS:
+        base_name = f"{base_name}_edge_tts"
+
     print(f"📂 Cleaned base name: {base_name}")
 
     output_dir = current_folder / base_name
@@ -190,13 +230,14 @@ def prepare_output_dir(current_folder: Path, epub_file: epub.EpubBook) -> list:
     return [output_dir, timestamp]
 
 
-def generate_audio_from_text(text: str, output_path: Path):
+def generate_audio_from_text(text: str, output_path: Path, stagger: int):
+    time.sleep(stagger/1000)
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             params = TTS_SETTINGS
-            xtts_params = XTTS_SETTINGS
+            edge_tts_params = EDGE_TTS_SETTINGS
 
-            params = xtts_params if USE_XTTS else params
+            params = edge_tts_params if USE_EDGE_TTS else params
 
             text = convert_all_caps_to_sentence_case(text)
             word_count = len(text.split());
@@ -217,12 +258,10 @@ def generate_audio_from_text(text: str, output_path: Path):
             }
 
             endpoint = KOKORO_ENDPOINT
-            endpoint = XTTS_ENDPOINT if USE_XTTS else endpoint
+            endpoint = EDGE_TTS_ENDPOINT if USE_EDGE_TTS else endpoint
 
-            print("\n" * 5)
-            print(f"🔊 Sending request to Kokoro TTS: {endpoint}")
             print(
-                f"     voice: {params.get('voice', '')} | speed: {params.get('speed', '')} | input: {params.get('input', '')[:120]}")
+                f"🔊 Sending request: {endpoint} | voice: {params.get('voice', '')} | speed: {params.get('speed', '')} | input: {params.get('input', '')[:60]}")
 
             response = requests.post(endpoint, json=params, headers=headers, timeout=300)
             response.raise_for_status()
@@ -243,9 +282,8 @@ def generate_audio_from_text(text: str, output_path: Path):
             final_audio = MP3(io.BytesIO(final_mp3))
             final_duration = int(final_audio.info.length * 1000)
 
-            print(f"     📥 Response received: length={len(response.content)} bytes, type={response.headers.get('Content-Type', 'unknown')}")
-            print(f"     💾 About to save audio file at {output_path.parent}...")
-            print(f"✅  Audio saved: {output_path.name} duration: {duration} ms, silence: {silence_ms}, final duration: {final_duration}")
+            print(
+                f"     📥 Response received: length={len(response.content)} bytes, type={response.headers.get('Content-Type', 'unknown')}")
             return final_duration
 
         except Exception as e:
@@ -259,6 +297,7 @@ def generate_audio_from_text(text: str, output_path: Path):
 
     return 0
 
+
 def add_silence_with_pydub(mp3_data: bytes, silence_duration_ms: int) -> bytes:
     original_audio = AudioSegment.from_file(io.BytesIO(mp3_data), format="mp3")
     silence = AudioSegment.silent(duration=silence_duration_ms)
@@ -267,6 +306,7 @@ def add_silence_with_pydub(mp3_data: bytes, silence_duration_ms: int) -> bytes:
     combined.export(out_buf, format="mp3")
     return out_buf.getvalue()
 
+
 def get_mp3_duration(path):
     try:
         audio = MP3(path)
@@ -274,6 +314,7 @@ def get_mp3_duration(path):
     except Exception as e:
         print(f"Error getting duration for {path}: {e}")
         return 0
+
 
 def convert_all_caps_to_sentence_case(text: str) -> str:
     def replacer(match):
@@ -390,11 +431,13 @@ def chapterize_mp3s(content_data: dict, output_dir: Path):
     content_json.write_text(json.dumps(content_data, indent=4, ensure_ascii=False))
     print("🖼️ Saved content.json to chapterized/")
 
+
 def get_chapter_file_name_from_index(idx: int):
     chapter_id = f"{idx + 1:03d}"
     out_filename = (f"Part-{chapter_id}").upper()
     out_filename = f"{out_filename}.mp3"
     return out_filename
+
 
 def ffmpeg_concat_mp3s(mp3_files, output_path):
     list_file = output_path.with_suffix(".txt")
