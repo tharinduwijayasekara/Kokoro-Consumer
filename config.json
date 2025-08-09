@@ -61,7 +61,9 @@
         "what're": "whattere",
         "How're": "Howwer",
         "how're": "howwer",
-        "Maxime": "Maxeeme"
+        "Maxime": "Maxeeme",
+        "breathed": "breethed",
+        "Breathed": "Breethed"
     },
     "replacements_edge_tts": {
         " . . . ": "...",
@@ -80,11 +82,11 @@
     },
     "edge_tts_settings": {
         "input": "<fill the text to be converted to speech>",
-        "voice": "en-US-AvaNeural",
+        "voice": "en-US-ChristopherNeural",
         "response_format": "mp3",
         "speed": 1.05,
         "model": "tts-1-hd"
     },
-    "use_edge_tts_service": true,
+    "use_edge_tts_service": false,
     "batch_size": 5
 }

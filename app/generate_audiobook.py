@@ -1,17 +1,14 @@
 import io
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 
 from mutagen.mp3 import MP3
 
-from utils import get_folder_name
 from text_processor import extract_paragraphs_from_epub
 
 sys.stdout.reconfigure(line_buffering=True)
 
 import os
-import re
 import time
 import json
 import datetime
@@ -21,8 +18,6 @@ import shutil
 from pydub import AudioSegment
 from pathlib import Path
 from ebooklib import epub
-from bs4 import BeautifulSoup
-from tqdm import tqdm
 
 # Load config
 CONFIG_PATH = Path("/app/config.json")
@@ -114,23 +109,16 @@ def convert_epub_to_audiobook(epub_file: epub):
             remaining -= 1
             continue
 
-        batch.append((paragraph, text_content, audio_file_path, (250 * len(batch))))
-        batch_size = len(batch)
+        generate_audio_from_text(paragraph[1], audio_file_path)
 
-        if batch_size < BATCH_SIZE:
-            continue
-
-        process_audio_batch(batch)
-        batch = []
-
-        current += batch_size
+        current += 1
         elapsed_time = datetime.datetime.now() - start_time
         time_left = (elapsed_time / current) * (remaining - current)
         completed = total - remaining + current
         percent = round((completed / total) * 100)
 
         print(
-            f"🔊 {audio_file} ({completed}/{total}) (batch size:{batch_size}) ({percent}%) duration: {seconds_to_hms(cumulative_duration / 1000)} - Elapsed: {elapsed_time} | Estimated time left: {time_left} | {remaining} at start")
+            f"🔊 {audio_file} ({completed}/{total}) ({percent}%) duration: {seconds_to_hms(cumulative_duration / 1000)} - Elapsed: {elapsed_time} | Estimated time left: {time_left} | {remaining} at start")
         print("=" * os.get_terminal_size().columns)
         term_width = os.get_terminal_size().columns
         bar_length = term_width - 8  # Reserve space for " 100%" and brackets
@@ -139,10 +127,6 @@ def convert_epub_to_audiobook(epub_file: epub):
         bar = '█' * filled_length + '-' * (bar_length - filled_length)
         print(f"<{bar}> {percent}%")
         print("=" * os.get_terminal_size().columns)
-
-    batch_size = len(batch)
-    if batch_size > 0:
-        process_audio_batch(batch)
 
     paragraphs = compute_durations(output_dir, paragraphs)
 
@@ -159,20 +143,6 @@ def convert_epub_to_audiobook(epub_file: epub):
         chapterize_mp3s(content_data, output_dir)
 
     print("🎉 Done!")
-
-
-def process_audio_batch(batch) -> int:
-    with ThreadPoolExecutor(max_workers=len(batch)) as executor:
-        future_to_para = {
-            executor.submit(generate_audio_from_text, text, path, stagger):
-                (para, path) for para, text, path, stagger in batch
-        }
-
-        for future in as_completed(future_to_para):
-            para, path = future_to_para[future]
-
-    return len(batch)
-
 
 def compute_durations(output_dir: Path, paragraphs: list) -> list:
     cumulative_duration = 0
@@ -230,8 +200,7 @@ def prepare_output_dir(current_folder: Path, epub_file: epub.EpubBook) -> list:
     return [output_dir, timestamp]
 
 
-def generate_audio_from_text(text: str, output_path: Path, stagger: int):
-    time.sleep(stagger/1000)
+def generate_audio_from_text(text: str, output_path: Path):
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             params = TTS_SETTINGS
@@ -240,15 +209,6 @@ def generate_audio_from_text(text: str, output_path: Path, stagger: int):
             params = edge_tts_params if USE_EDGE_TTS else params
 
             text = convert_all_caps_to_sentence_case(text)
-            word_count = len(text.split());
-
-            if (False):
-                if (word_count < 5 and not text.strip().endswith("...")):
-                    text = f"{text}..."
-                    params.update({"speed": 1.0})
-                else:
-                    params.update({"speed": 1.1})
-
             params.update({"input": text})
             params.update({"text": text})
 
