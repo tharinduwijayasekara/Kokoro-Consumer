@@ -71,6 +71,7 @@
         "....": "...",
         "* * *": "...",
         " — ": "...",
+        "*": "",
         "OceanofPDF.com": "ocean-of-PDF-dot-com"
     },
     "edge_tts_api": {
@@ -82,10 +83,10 @@
     },
     "edge_tts_settings": {
         "input": "<fill the text to be converted to speech>",
-        "voice": "en-US-ChristopherNeural",
+        "voice": "en-US-AvaNeural",
         "response_format": "mp3",
-        "speed": 1.05,
-        "model": "tts-1-hd"
+        "speed": 1.07,
+        "model": "tts-1"
     },
     "use_edge_tts_service": false,
     "batch_size": 5
