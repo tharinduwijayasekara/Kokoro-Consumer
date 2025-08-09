@@ -21,6 +21,7 @@ if not CONFIG_PATH.exists():
     raise FileNotFoundError("Missing config.json file.")
 config = json.loads(CONFIG_PATH.read_text())
 
+USE_EDGE_TTS = config.get("use_edge_tts_service", False)
 
 def extract_paragraphs_from_epub(epub_path: Path) -> list:
     book = epub.read_epub(str(epub_path))
@@ -54,13 +55,14 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
 
             para_id = f"pgrf-{counter:05d}"
             paragraphs.append([
-                para_id,
-                chapter_text_cleaned,
-                1,
-                '',
-                chapter_text,
-                0,
-                0
+                para_id, # id
+                chapter_text_cleaned, # kokoro text
+                1, # is chapter title
+                '', # mp3 file name paragraph
+                chapter_text, # display text
+                0, # duration milliseconds
+                0, # cumulative duration milliseconds,
+                '' # mp3 file name chapter
             ])
 
             counter += 1
@@ -72,8 +74,8 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
                 text = p.get_text().strip()
                 if text and is_valid_paragraph(text):
                     para_id = f"pgrf-{counter:05d}"
-                    italics_safe_text = extract_text_with_italics(p)
-                    cleaned_text = clean_text(italics_safe_text);
+                    italics_safe_text = extract_text_preserve_italics(p)
+                    cleaned_text = clean_text(italics_safe_text)
                     if is_valid_paragraph(cleaned_text):
                         paragraphs.append([
                             para_id,
@@ -82,9 +84,40 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
                             '',
                             clean_text(italics_safe_text, True),
                             0,
-                            0
+                            0,
+                            ''
                         ])
                         counter += 1
+
+    counter += 1
+    chapter_texts.append("Structure")
+
+    para_id = f"pgrf-{counter:05d}"
+    paragraphs.append([
+        para_id,
+        "Structure",
+        1,
+        '',
+        "Structure",
+        0,
+        0,
+        ''
+    ])
+
+    for item in book.get_items_of_type(EPUB_DOCUMENT):
+        counter += 1
+        para_id = f"pgrf-{counter:05d}"
+        cleaned_text = clean_text(item.get_name())
+        paragraphs.append([
+            para_id,
+            cleaned_text,
+            0,
+            '',
+            cleaned_text,
+            0,
+            0,
+            ''
+        ])
 
     print("Chapters:", chapter_texts)
     return paragraphs
@@ -125,7 +158,7 @@ def clean_text(text: str, for_display: bool = False) -> str:
         text = fix_word_number_dash(text)  # Fix word-number dash issues
 
         # Apply replacements from config if available
-        replacements = config.get("replacements", {})
+        replacements = config.get("replacements", {}) if (USE_EDGE_TTS == False) else config.get("replacements_edge_tts", {})
         if replacements:
             text = apply_replacements(text, replacements)
 
@@ -148,32 +181,85 @@ def fix_word_number_dash(text):
     # Replace with word space number
     return re.sub(pattern, r'\1 \2', text)
 
-def extract_text_with_italics(p):
+def extract_text_preserve_italics(p):
     parts = []
-    detected=False
+    detected = False
 
-    for elem in p.descendants:
+    def process_element(elem):
+        nonlocal detected
         if isinstance(elem, NavigableString):
-            last_part_idx = len(parts) - 1
-            elem_string = str(elem)
-            if last_part_idx < 0:
-                parts.append(elem_string)
-            if last_part_idx >= 0 and parts[last_part_idx] != f"*{elem_string}*":
-                parts.append(elem_string)
+            parts.append(str(elem))
         elif isinstance(elem, Tag):
+            # Check if this tag (and all its contents) are italic
             is_italic = (
                     elem.name in ['i', 'em'] or
                     (elem.name == 'span' and any('italic' in cls.lower() for cls in elem.get('class', []))) or
                     (elem.name == 'span' and any('class_s5fk' in cls.lower() for cls in elem.get('class', [])))
             )
+
             if is_italic:
                 inner = elem.get_text()
+                parts.append(f"*{inner}*")
+                detected = True
+            else:
+                for child in elem.children:
+                    process_element(child)
+
+    process_element(p)
+
+    processed = ''.join(parts).strip()
+
+    if detected:
+        print("Italics detected: ", p, parts, processed)
+
+    return processed
+
+def extract_text_with_italics(p):
+    parts = []
+    detected=False
+
+    print("\n\n\n\n\n\nExtracting text from", p)
+
+    for elem in p.descendants:
+
+        print("Parts", parts)
+
+        if isinstance(elem, NavigableString):
+            last_part_idx = len(parts) - 1
+            elem_string = str(elem)
+
+            print("Element: ", elem_string)
+
+            if last_part_idx < 0:
+                print("Parts is empty, appending in the element string as is")
+                parts.append(elem_string)
+            if (last_part_idx >= 0
+                    and (
+                            parts[last_part_idx] != f"*{elem_string}*"
+                            and parts[last_part_idx] != f"*{elem_string},*"
+                            and parts[last_part_idx] != f"*{elem_string}.*"
+                    )
+            ):
+                print("Parts is not empty, and last part is not: ", f"*{elem_string}*", f"*{elem_string},*", f"*{elem_string}.*")
+                parts.append(elem_string)
+        elif isinstance(elem, Tag):
+
+            is_italic = (
+                    elem.name in ['i', 'em'] or
+                    (elem.name == 'span' and any('italic' in cls.lower() for cls in elem.get('class', []))) or
+                    (elem.name == 'span' and any('class_s5fk' in cls.lower() for cls in elem.get('class', [])))
+            )
+
+            if is_italic:
+                inner = elem.get_text()
+                elem_string = str(elem)
+                print("Part is in italics", [inner, elem_string])
                 parts.append(f"*{inner}*")
                 detected=True
 
     processed = ''.join(parts).strip()
 
     if detected:
-        print("Italics detected: ", p, processed)
+        print("Italics detected: ", p, parts, processed)
 
     return processed
