@@ -37,10 +37,13 @@ EPUB_IMAGE_2 = 10
 EDGE_TTS_ENDPOINT = config["edge_tts_api"]["host"] + config["edge_tts_api"]["endpoints"]["speech"]
 EDGE_TTS_SETTINGS = config.get("edge_tts_settings", {})
 USE_EDGE_TTS = config.get("use_edge_tts_service", False)
+if "--use_edge_tts" in sys.argv:
+    USE_EDGE_TTS = True
+
 USE_WAV_TO_MP3 = config.get("use_wav_to_mp3", False)
 USE_GET_REQUEST = config.get("use_get_request", False)
 
-BATCH_SIZE = config.get("batch_size", 5)
+BATCH_SIZE = config.get("batch_size", 5) if USE_EDGE_TTS else 5
 BATCH_STAGGER = config.get("batch_stagger", 250)
 
 
@@ -261,7 +264,7 @@ def generate_audio_from_text(text: str, output_path: Path, stagger: int):
             endpoint = EDGE_TTS_ENDPOINT if USE_EDGE_TTS else endpoint
 
             print(
-                f"🔊 Sending request: {endpoint} | voice: {params.get('voice', '')} | speed: {params.get('speed', '')} | input: {params.get('input', '')[:60]}")
+                f"🔊 Sending request: {endpoint} | voice: {params.get('voice', '')[15]} | speed: {params.get('speed', '')} | input: {params.get('input', '')[:60]}")
 
             if USE_GET_REQUEST:
                 query_string = urllib.parse.urlencode(params)
