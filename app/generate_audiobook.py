@@ -1,5 +1,7 @@
 import io
 import sys
+import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 
 from mutagen.mp3 import MP3
@@ -35,8 +37,11 @@ EPUB_IMAGE_2 = 10
 EDGE_TTS_ENDPOINT = config["edge_tts_api"]["host"] + config["edge_tts_api"]["endpoints"]["speech"]
 EDGE_TTS_SETTINGS = config.get("edge_tts_settings", {})
 USE_EDGE_TTS = config.get("use_edge_tts_service", False)
+USE_WAV_TO_MP3 = config.get("use_wav_to_mp3", False)
+USE_GET_REQUEST = config.get("use_get_request", False)
 
 BATCH_SIZE = config.get("batch_size", 5)
+BATCH_STAGGER = config.get("batch_stagger", 250)
 
 
 def main():
@@ -109,16 +114,23 @@ def convert_epub_to_audiobook(epub_file: epub):
             remaining -= 1
             continue
 
-        generate_audio_from_text(paragraph[1], audio_file_path)
+        batch.append((paragraph, text_content, audio_file_path, (BATCH_STAGGER * len(batch))))
+        batch_size = len(batch)
 
-        current += 1
+        if batch_size < BATCH_SIZE:
+            continue
+
+        process_audio_batch(batch)
+        batch = []
+
+        current += batch_size
         elapsed_time = datetime.datetime.now() - start_time
         time_left = (elapsed_time / current) * (remaining - current)
         completed = total - remaining + current
         percent = round((completed / total) * 100)
 
         print(
-            f"🔊 {audio_file} ({completed}/{total}) ({percent}%) duration: {seconds_to_hms(cumulative_duration / 1000)} - Elapsed: {elapsed_time} | Estimated time left: {time_left} | {remaining} at start")
+            f"🔊 {audio_file} ({completed}/{total}) (batch size:{batch_size}) ({percent}%) duration: {seconds_to_hms(cumulative_duration / 1000)} - Elapsed: {elapsed_time} | Estimated time left: {time_left} | {remaining} at start")
         print("=" * os.get_terminal_size().columns)
         term_width = os.get_terminal_size().columns
         bar_length = term_width - 8  # Reserve space for " 100%" and brackets
@@ -127,6 +139,10 @@ def convert_epub_to_audiobook(epub_file: epub):
         bar = '█' * filled_length + '-' * (bar_length - filled_length)
         print(f"<{bar}> {percent}%")
         print("=" * os.get_terminal_size().columns)
+
+    batch_size = len(batch)
+    if batch_size > 0:
+        process_audio_batch(batch)
 
     paragraphs = compute_durations(output_dir, paragraphs)
 
@@ -143,6 +159,20 @@ def convert_epub_to_audiobook(epub_file: epub):
         chapterize_mp3s(content_data, output_dir)
 
     print("🎉 Done!")
+
+
+def process_audio_batch(batch) -> int:
+    with ThreadPoolExecutor(max_workers=len(batch)) as executor:
+        future_to_para = {
+            executor.submit(generate_audio_from_text, text, path, stagger):
+                (para, path) for para, text, path, stagger in batch
+        }
+
+        for future in as_completed(future_to_para):
+            para, path = future_to_para[future]
+
+    return len(batch)
+
 
 def compute_durations(output_dir: Path, paragraphs: list) -> list:
     cumulative_duration = 0
@@ -200,7 +230,8 @@ def prepare_output_dir(current_folder: Path, epub_file: epub.EpubBook) -> list:
     return [output_dir, timestamp]
 
 
-def generate_audio_from_text(text: str, output_path: Path):
+def generate_audio_from_text(text: str, output_path: Path, stagger: int):
+    time.sleep(stagger/1000)
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             params = TTS_SETTINGS
@@ -209,6 +240,15 @@ def generate_audio_from_text(text: str, output_path: Path):
             params = edge_tts_params if USE_EDGE_TTS else params
 
             text = convert_all_caps_to_sentence_case(text)
+            word_count = len(text.split());
+
+            if (False):
+                if (word_count < 5 and not text.strip().endswith("...")):
+                    text = f"{text}..."
+                    params.update({"speed": 1.0})
+                else:
+                    params.update({"speed": 1.1})
+
             params.update({"input": text})
             params.update({"text": text})
 
@@ -223,10 +263,24 @@ def generate_audio_from_text(text: str, output_path: Path):
             print(
                 f"🔊 Sending request: {endpoint} | voice: {params.get('voice', '')} | speed: {params.get('speed', '')} | input: {params.get('input', '')[:60]}")
 
-            response = requests.post(endpoint, json=params, headers=headers, timeout=300)
-            response.raise_for_status()
+            if USE_GET_REQUEST:
+                query_string = urllib.parse.urlencode(params)
+                full_url = f"{endpoint}?{query_string}"
+                response = requests.get(full_url, timeout=300)
+            else:
+                response = requests.post(endpoint, json=params, headers=headers, timeout=300)
 
-            audio = MP3(io.BytesIO(response.content))
+            response.raise_for_status()
+            response_bytes = response.content
+
+            if USE_WAV_TO_MP3:
+                wav_data = io.BytesIO(response_bytes)
+                audio = AudioSegment.from_wav(wav_data)
+                mp3_io = io.BytesIO()
+                audio.export(mp3_io, format="mp3")
+                response_bytes = mp3_io.getvalue()
+
+            audio = MP3(io.BytesIO(response_bytes))
             duration = int(audio.info.length * 1000)
 
             silence_ms = 200
@@ -234,7 +288,7 @@ def generate_audio_from_text(text: str, output_path: Path):
             if duration > 10000: silence_ms = 500
             if duration > 15000: silence_ms = 700
 
-            final_mp3 = add_silence_with_pydub(response.content, silence_ms)
+            final_mp3 = add_silence_with_pydub(response_bytes, silence_ms)
 
             with open(output_path, 'wb') as f:
                 f.write(final_mp3)

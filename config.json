@@ -19,11 +19,11 @@
         "input": "<fill the text to be converted to speech>",
         "--voice": "af_heart+af_sarah+af_bella+ef_dora",
         "--voice": "af_heart(2)+af_jessica(1)+af_sky(3)",
-        "voice": "af_heart(2)+af_jessica(1)+af_sky(4)",
+        "voice": "af_heart(4)+af_jessica(1)+af_sky(3)+af_river(2)",
         "--voice": "am_michael+am_fenrir+am_michael+bm_lewis",
         "response_format": "mp3",
         "download_format": "mp3",
-        "speed": 1.07,
+        "speed": 1.08,
         "stream": false,
         "return_download_link": true,
         "lang_code": "a",
@@ -88,6 +88,23 @@
         "speed": 1.07,
         "model": "tts-1"
     },
+    "--edge_tts_api": {
+        "host": "http://host.docker.internal:5002",
+        "endpoints": {
+            "speech": "/api/tts"
+        },
+        "timeout": 300
+    },
+    "--edge_tts_settings": {
+        "input": "<fill the text to be converted to speech>",
+        "voice": "en-US-EmmaNeural",
+        "response_format": "mp3",
+        "speed": 1.06,
+        "model": "tts-1"
+    },
     "use_edge_tts_service": false,
-    "batch_size": 5
+    "use_wav_to_mp3": false,
+    "use_get_request": false,
+    "batch_size": 50,
+    "batch_stagger": 500
 }
