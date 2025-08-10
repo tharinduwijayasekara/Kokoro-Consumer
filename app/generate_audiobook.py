@@ -35,6 +35,7 @@ EPUB_IMAGE = 1
 EPUB_IMAGE_2 = 10
 
 EDGE_TTS_ENDPOINT = config["edge_tts_api"]["host"] + config["edge_tts_api"]["endpoints"]["speech"]
+EDGE_TTS_HOST_ROUND_ROBIN = config['edge_tts_api']['host_round_robin']
 EDGE_TTS_SETTINGS = config.get("edge_tts_settings", {})
 USE_EDGE_TTS = config.get("use_edge_tts_service", False)
 if "--use_edge_tts" in sys.argv:
@@ -46,6 +47,7 @@ USE_GET_REQUEST = config.get("use_get_request", False)
 BATCH_SIZE = config.get("batch_size", 5) if USE_EDGE_TTS else 5
 BATCH_STAGGER = config.get("batch_stagger", 250)
 
+ROUND_ROBIN_INDEX=0
 
 def main():
     convert_epubs_to_audiobooks()
@@ -234,6 +236,8 @@ def prepare_output_dir(current_folder: Path, epub_file: epub.EpubBook) -> list:
 
 
 def generate_audio_from_text(text: str, output_path: Path, stagger: int):
+    global ROUND_ROBIN_INDEX
+
     time.sleep(stagger/1000)
     for attempt in range(1, MAX_RETRIES + 1):
         try:
@@ -261,10 +265,19 @@ def generate_audio_from_text(text: str, output_path: Path, stagger: int):
             }
 
             endpoint = KOKORO_ENDPOINT
-            endpoint = EDGE_TTS_ENDPOINT if USE_EDGE_TTS else endpoint
+            host_count = len(EDGE_TTS_HOST_ROUND_ROBIN)
+
+            if USE_EDGE_TTS:
+                endpoint = EDGE_TTS_ENDPOINT
+
+                if host_count > 0:
+                    endpoint = EDGE_TTS_HOST_ROUND_ROBIN[ROUND_ROBIN_INDEX] + config["edge_tts_api"]["endpoints"]["speech"]
+                    ROUND_ROBIN_INDEX += 1
+                    if ROUND_ROBIN_INDEX >= host_count:
+                        ROUND_ROBIN_INDEX = 0
 
             print(
-                f"🔊 Sending request: {endpoint} | voice: {params.get('voice', '')[15]} | speed: {params.get('speed', '')} | input: {params.get('input', '')[:60]}")
+                f"🔊 Sending request: {endpoint} | voice: {params.get('voice', '')[:15]} | speed: {params.get('speed', '')} | input: {params.get('input', '')[:60]}")
 
             if USE_GET_REQUEST:
                 query_string = urllib.parse.urlencode(params)

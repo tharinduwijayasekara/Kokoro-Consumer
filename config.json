@@ -76,7 +76,13 @@
     },
     "edge_tts_api": {
         "host": "http://host.docker.internal:5050",
-        "host_port_range": 10,
+        "host_round_robin": [
+            "http://host.docker.internal:5050",
+            "http://host.docker.internal:5051",
+            "http://host.docker.internal:5052",
+            "http://host.docker.internal:5053",
+            "http://host.docker.internal:5054"
+        ],
         "endpoints": {
             "speech": "/v1/audio/speech"
         },
@@ -106,6 +112,6 @@
     "use_edge_tts_service": false,
     "use_wav_to_mp3": false,
     "use_get_request": false,
-    "batch_size": 20,
-    "batch_stagger": 500
+    "batch_size": 50,
+    "batch_stagger": 200
 }
