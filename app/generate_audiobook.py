@@ -6,6 +6,8 @@ from io import BytesIO
 
 from mutagen.mp3 import MP3
 
+from endpoint import get_endpoint_from_round_robin
+from utils import get_config
 from text_processor import extract_paragraphs_from_epub
 
 sys.stdout.reconfigure(line_buffering=True)
@@ -21,11 +23,7 @@ from pydub import AudioSegment
 from pathlib import Path
 from ebooklib import epub
 
-# Load config
-CONFIG_PATH = Path("/app/config.json")
-if not CONFIG_PATH.exists():
-    raise FileNotFoundError("Missing config.json file.")
-config = json.loads(CONFIG_PATH.read_text())
+config = get_config()
 
 KOKORO_ENDPOINT = config["api"]["host"] + config["api"]["endpoints"]["speech"]
 TTS_SETTINGS = config.get("tts_settings", {})
@@ -38,16 +36,16 @@ EDGE_TTS_ENDPOINT = config["edge_tts_api"]["host"] + config["edge_tts_api"]["end
 EDGE_TTS_HOST_ROUND_ROBIN = config['edge_tts_api']['host_round_robin']
 EDGE_TTS_SETTINGS = config.get("edge_tts_settings", {})
 USE_EDGE_TTS = config.get("use_edge_tts_service", False)
-if "--use_edge_tts" in sys.argv:
-    USE_EDGE_TTS = True
 
 USE_WAV_TO_MP3 = config.get("use_wav_to_mp3", False)
 USE_GET_REQUEST = config.get("use_get_request", False)
 
-BATCH_SIZE = config.get("batch_size", 5) if USE_EDGE_TTS else 5
+BATCH_SIZE = config.get("batch_size", 5) if USE_EDGE_TTS else 20
 BATCH_STAGGER = config.get("batch_stagger", 250)
 
-ROUND_ROBIN_INDEX=0
+ROUND_ROBIN_INDEX_REF = {
+    "current": 0
+}
 
 def main():
     convert_epubs_to_audiobooks()
@@ -236,7 +234,7 @@ def prepare_output_dir(current_folder: Path, epub_file: epub.EpubBook) -> list:
 
 
 def generate_audio_from_text(text: str, output_path: Path, stagger: int):
-    global ROUND_ROBIN_INDEX
+    global ROUND_ROBIN_INDEX_REF
 
     time.sleep(stagger/1000)
     for attempt in range(1, MAX_RETRIES + 1):
@@ -247,14 +245,6 @@ def generate_audio_from_text(text: str, output_path: Path, stagger: int):
             params = edge_tts_params if USE_EDGE_TTS else params
 
             text = convert_all_caps_to_sentence_case(text)
-            word_count = len(text.split());
-
-            if (False):
-                if (word_count < 5 and not text.strip().endswith("...")):
-                    text = f"{text}..."
-                    params.update({"speed": 1.0})
-                else:
-                    params.update({"speed": 1.1})
 
             params.update({"input": text})
             params.update({"text": text})
@@ -264,20 +254,10 @@ def generate_audio_from_text(text: str, output_path: Path, stagger: int):
                 "Content-Type": "application/json"
             }
 
-            endpoint = KOKORO_ENDPOINT
-            host_count = len(EDGE_TTS_HOST_ROUND_ROBIN)
-
-            if USE_EDGE_TTS:
-                endpoint = EDGE_TTS_ENDPOINT
-
-                if host_count > 0:
-                    endpoint = EDGE_TTS_HOST_ROUND_ROBIN[ROUND_ROBIN_INDEX] + config["edge_tts_api"]["endpoints"]["speech"]
-                    ROUND_ROBIN_INDEX += 1
-                    if ROUND_ROBIN_INDEX >= host_count:
-                        ROUND_ROBIN_INDEX = 0
+            endpoint = get_endpoint_from_round_robin(config, ROUND_ROBIN_INDEX_REF)
 
             print(
-                f"🔊 Sending request: {endpoint} | voice: {params.get('voice', '')[:15]} | speed: {params.get('speed', '')} | input: {params.get('input', '')[:60]}")
+                f"🔊 Sending request: {endpoint} | RR Index: {ROUND_ROBIN_INDEX_REF.get('current')} | voice: {params.get('voice', '')[:15]} | speed: {params.get('speed', '')} | input: {params.get('input', '')[:60]}")
 
             if USE_GET_REQUEST:
                 query_string = urllib.parse.urlencode(params)
