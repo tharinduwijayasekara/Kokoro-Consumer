@@ -67,7 +67,7 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
 
             counter += 1
 
-            for p in soup.find_all(['p', 'li', 'tr', 'dd']):
+            for p in soup.find_all(['p', 'li', 'tr', 'dd', 'blockquote']):
                 if found_in_p_tag and p == found_in_p_tag:
                     continue
 

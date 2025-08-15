@@ -30,12 +30,19 @@ def get_book(book_path: Path):
     response_content_json_path = f"{response_chapterized_path}/content.json"
     response_cover_path = f"{response_chapterized_path}/cover.jpg"
 
+    audio_paths = []
+    if status == "completed":
+        for item in chapterized_path.glob("*.mp3"):
+            audio_paths.append(f"{response_chapterized_path}/{item.name}")
+
     return {
         "book_id": book_path.name,
-        "chapterized_path": response_chapterized_path,
-        "content_json_path": response_content_json_path,
-        "cover_path": response_cover_path,
-        "status": status
+        "path": response_chapterized_path,
+        "content_json": response_content_json_path,
+        "progress_json": None,
+        "cover": response_cover_path,
+        "status": status,
+        "audios": audio_paths
     }
 
 def get_content(path: str):
