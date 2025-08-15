@@ -17,4 +17,5 @@ RUN adduser --disabled-password --gecos "" --uid 1000 ttsuser
 # Switch to the new user
 USER ttsuser
 
-#CMD ["python", "-u", "/app/app/generate_audiobook.py"]
+# Command to run FastAPI
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

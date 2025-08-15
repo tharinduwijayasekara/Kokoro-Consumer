@@ -41,7 +41,7 @@ USE_WAV_TO_MP3 = config.get("use_wav_to_mp3", False)
 USE_GET_REQUEST = config.get("use_get_request", False)
 
 BATCH_SIZE = config.get("batch_size", 5) if USE_EDGE_TTS else 20
-BATCH_STAGGER = config.get("batch_stagger", 250)
+BATCH_STAGGER = config.get("batch_stagger", 250) if USE_EDGE_TTS else 1000
 
 ROUND_ROBIN_INDEX_REF = {
     "current": 0
@@ -52,7 +52,7 @@ def main():
 
 
 def convert_epubs_to_audiobooks():
-    current_folder = Path("/app/books")
+    current_folder = Path(config.get("books_folder"))
     epub_files = list(current_folder.glob("*.epub"))
 
     if not epub_files:

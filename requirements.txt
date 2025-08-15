@@ -4,3 +4,5 @@ requests
 tqdm
 pydub
 mutagen
+fastapi
+uvicorn[standard]
