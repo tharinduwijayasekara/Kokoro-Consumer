@@ -179,15 +179,22 @@ def process_audio_batch(batch) -> int:
 
 def compute_durations(output_dir: Path, paragraphs: list) -> list:
     cumulative_duration = 0
+    chapter_duration = 0
 
     for paragraph in paragraphs:
         audio_file_path = Path(output_dir / paragraph[3])
 
         if audio_file_path.exists() and audio_file_path.stat().st_size > 0:
+            if paragraph[2] == 1 or (chapter_duration/1000) >= config.get("chapter_paragraph_limit_seconds"):
+                paragraph[2] = 1
+                chapter_duration = 0
+
             duration = get_mp3_duration(audio_file_path)
             cumulative_duration = cumulative_duration + duration
+            chapter_duration = chapter_duration + duration
+
             print(
-                f"✅ Computing cumulative duration: {audio_file_path} {seconds_to_hms(duration / 1000)} {seconds_to_hms(cumulative_duration / 1000)}")
+                f"✅ Computing cumulative duration: {audio_file_path} Duration: {seconds_to_hms(duration / 1000)} Chapter Duration: {seconds_to_hms(chapter_duration / 1000)} Total Duration: {seconds_to_hms(cumulative_duration / 1000)}")
 
             paragraph[5] = duration
             paragraph[6] = cumulative_duration

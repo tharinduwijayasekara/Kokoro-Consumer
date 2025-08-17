@@ -15,7 +15,12 @@ def list_books() -> list:
 
     return [items]
 
-def get_book(book_path: Path):
+def book_detail(book_id: str) -> dict:
+    current_folder = Path(config.get("books_folder"))
+    book_path = current_folder / book_id
+    return get_book(book_path)
+
+def get_book(book_path: Path) -> dict:
     chapterized_path = book_path / book_path.name
     content_json_path = chapterized_path / 'content.json'
     cover_path = chapterized_path / 'cover.jpg'

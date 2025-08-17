@@ -8,6 +8,7 @@
         "file": "kokoro-consumer.log"
     },
     "books_folder": "/app/books",
+    "chapter_paragraph_limit_seconds": 3600,
     "api": {
         "host": "http://host.docker.internal:8888",
         "host_round_robin": [],
