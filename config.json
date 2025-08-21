@@ -8,7 +8,8 @@
         "file": "kokoro-consumer.log"
     },
     "books_folder": "/app/books",
-    "chapter_paragraph_limit_seconds": 3600,
+    "chapterized_books_folder": "/app/books/Orator",
+    "chapter_paragraph_limit_seconds": 3580,
     "api": {
         "host": "http://host.docker.internal:8888",
         "host_round_robin": [],
@@ -22,15 +23,16 @@
         "input": "<fill the text to be converted to speech>",
         "--voice": "af_heart+af_sarah+af_bella+ef_dora",
         "--voice": "af_heart(2)+af_jessica(1)+af_sky(3)",
-        "voice": "af_heart(4)+af_jessica(1)+af_sky(3)+af_river(2)",
+        "--voice": "af_heart(4)+af_jessica(1)+af_sky(3)",
+        "voice": "af_heart(6)+af_jessica(1)+af_sky(3)+af_bella(2)",
         "--voice": "am_michael+am_fenrir+am_michael+bm_lewis",
         "response_format": "mp3",
         "download_format": "mp3",
-        "speed": 1.08,
+        "speed": 1.1,
         "stream": false,
         "return_download_link": true,
         "lang_code": "a",
-        "volume_multiplier": 1,
+        "volume_multiplier": 1.4,
         "normalization_options": {
             "normalize": true,
             "unit_normalization": true,
@@ -99,13 +101,16 @@
         "endpoints": {
             "speech": "/v1/audio/speech"
         },
-        "timeout": 300
+        "timeout": 300,
+        "--prosody_mods": "<speak version='1.0' xml:lang='en-US'><voice name='en-US-AvaNeural'><prosody rate='+7%' pitch='0%' range='-60%'>____TEXT____</prosody></voice></speak>",
+        "prosody_mods": "____TEXT____"
     },
     "edge_tts_settings": {
         "input": "<fill the text to be converted to speech>",
         "voice": "en-US-AvaNeural",
+        "--voice": "en-US-AvaMultilingualNeural",
         "response_format": "mp3",
-        "speed": 1.07,
+        "speed": 1.08,
         "model": "tts-1"
     },
     "--edge_tts_api": {

@@ -33,6 +33,7 @@ EPUB_IMAGE = 1
 EPUB_IMAGE_2 = 10
 
 EDGE_TTS_ENDPOINT = config["edge_tts_api"]["host"] + config["edge_tts_api"]["endpoints"]["speech"]
+EDGE_TTS_PROSODY_MODS = config["edge_tts_api"]["prosody_mods"]
 EDGE_TTS_HOST_ROUND_ROBIN = config['edge_tts_api']['host_round_robin']
 EDGE_TTS_SETTINGS = config.get("edge_tts_settings", {})
 USE_EDGE_TTS = config.get("use_edge_tts_service", False)
@@ -41,7 +42,7 @@ USE_WAV_TO_MP3 = config.get("use_wav_to_mp3", False)
 USE_GET_REQUEST = config.get("use_get_request", False)
 
 BATCH_SIZE = config.get("batch_size", 5) if USE_EDGE_TTS else 20
-BATCH_STAGGER = config.get("batch_stagger", 250) if USE_EDGE_TTS else 1000
+BATCH_STAGGER = config.get("batch_stagger", 250) if USE_EDGE_TTS else 500
 
 ROUND_ROBIN_INDEX_REF = {
     "current": 0
@@ -253,6 +254,9 @@ def generate_audio_from_text(text: str, output_path: Path, stagger: int):
 
             text = convert_all_caps_to_sentence_case(text)
 
+            if (USE_EDGE_TTS):
+                text = EDGE_TTS_PROSODY_MODS.replace("____TEXT____", text)
+
             params.update({"input": text})
             params.update({"text": text})
 
@@ -369,13 +373,15 @@ def extract_cover_image(epub_path: Path, output_dir: Path) -> Path | None:
             return cover_image_path
 
     print("❌ No cover image found in EPUB.")
+    shutil.copyfile(Path('/app/app/assets/cover.jpg'), cover_image_path)
+
     return None
 
 
 def chapterize_mp3s(content_data: dict, output_dir: Path):
     print("🔍 Scanning MP3 files to merge into chapters...")
 
-    chapterized_dir = output_dir / output_dir.name
+    chapterized_dir = Path(get_config().get('chapterized_books_folder')) / output_dir.name
     content_json = chapterized_dir / "content.json";
 
     # 🔥 Delete existing chapterized folder
