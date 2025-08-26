@@ -6,3 +6,5 @@ pydub
 mutagen
 fastapi
 uvicorn[standard]
+txt2epub
+langdetect
