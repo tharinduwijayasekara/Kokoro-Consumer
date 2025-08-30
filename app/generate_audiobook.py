@@ -38,6 +38,8 @@ EDGE_TTS_PROSODY_MODS = config["edge_tts_api"]["prosody_mods"]
 EDGE_TTS_HOST_ROUND_ROBIN = config['edge_tts_api']['host_round_robin']
 EDGE_TTS_SETTINGS = config.get("edge_tts_settings", {})
 USE_EDGE_TTS = config.get("use_edge_tts_service", False)
+EDGE_TTS_VOICE = EDGE_TTS_SETTINGS.get("voice")
+EDGE_TTS_VOICE2 = EDGE_TTS_SETTINGS.get("voice2", EDGE_TTS_VOICE)
 
 USE_WAV_TO_MP3 = config.get("use_wav_to_mp3", False)
 USE_GET_REQUEST = config.get("use_get_request", False)
@@ -259,6 +261,10 @@ def generate_audio_from_text(text: str, output_path: Path, stagger: int):
 
             if (USE_EDGE_TTS):
                 text = EDGE_TTS_PROSODY_MODS.replace("____TEXT____", text)
+                params.update({"voice": EDGE_TTS_VOICE})
+
+                if "'" in text or '"' in text:
+                    params.update({"voice": EDGE_TTS_VOICE2})
 
             params.update({"input": text})
             params.update({"text": text})

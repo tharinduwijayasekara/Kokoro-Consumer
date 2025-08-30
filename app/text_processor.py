@@ -185,6 +185,14 @@ def clean_text(text: str, for_display: bool = False) -> str:
 
 
 def apply_replacements(text: str, replacements: dict) -> str:
+    # Go through each replacement, escaping keys to treat them as plain text
+    for key, value in sorted(replacements.items(), key=lambda kv: len(kv[0]), reverse=True):
+        pattern = r'\b{}\b'.format(re.escape(key))
+        text = re.sub(pattern, value, text)
+    return text
+
+
+def apply_replacements_old(text: str, replacements: dict) -> str:
     # Replace all occurrences of keys in `replacements` with their corresponding values in the text.
     for key, value in replacements.items():
         text = text.replace(key, value)
