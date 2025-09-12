@@ -116,14 +116,14 @@
         "--voice": "en-US-AvaNeural",
         "voice": "en-US-BrianNeural",
         "response_format": "mp3",
-        "speed": 1.07,
+        "speed": 1.15,
         "model": "tts-1-hd"
     },
     "use_edge_tts_service": false,
     "use_wav_to_mp3": false,
     "use_get_request": false,
-    "batch_size": 20,
-    "batch_stagger": 100,
+    "batch_size": 60,
+    "batch_stagger": 150,
     "-ignore_upto_paragraph": 2500,
     "-take": 1000,
     "from_scratch": true
