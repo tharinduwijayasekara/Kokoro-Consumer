@@ -232,7 +232,7 @@ def prepare_output_dir(current_folder: Path, epub_file: epub.EpubBook) -> list:
     base_name = base_name.strip('-')  # Remove leading/trailing dashes
 
     if USE_EDGE_TTS:
-        base_name = f"[E]_{base_name}"
+        base_name = f"{base_name}_[E]"
 
     print(f"📂 Cleaned base name: {base_name}")
 
