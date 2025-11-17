@@ -165,6 +165,8 @@ def convert_epub_to_audiobook(epub_file: epub):
     if "--chapterize" in sys.argv:
         print("📚 Chapterizing MP3 files...")
         chapterize_mp3s(content_data, output_dir)
+        print("📚 Singling MP3 files...")
+        single_mp3(content_data, output_dir)
 
     print("🎉 Done!")
 
@@ -386,12 +388,51 @@ def extract_cover_image(epub_path: Path, output_dir: Path) -> Path | None:
 
     return None
 
+def single_mp3(content_data: dict, output_dir: Path):
+    print("🔍 Scanning MP3 files to merge into single...")
+
+    singled_dir = Path(get_config().get('singled_books_folder')) / output_dir.name
+    content_json = singled_dir / "content.json"
+    single_audio_name = 'output.mp3'
+
+    # 🔥 Delete existing chapterized folder
+    if singled_dir.exists():
+        print(f"🧹 Removing existing folder: {singled_dir}")
+        shutil.rmtree(singled_dir)
+
+    singled_dir.mkdir(parents=True, exist_ok=True)
+
+    paragraphs = content_data['paragraphs']
+    if not paragraphs:
+        print("❌ No paragraphs found to merge. Nothing to do.")
+        return
+
+    mp3s_to_merge = []
+
+    for paragraph in paragraphs:
+        para_id = paragraph[0]
+        mp3_file_name = paragraph[3]
+        mp3_file_path = output_dir / mp3_file_name
+        mp3s_to_merge.append(mp3_file_path)
+        paragraph[8] = single_audio_name
+
+    ffmpeg_concat_mp3s(mp3s_to_merge, singled_dir/single_audio_name)
+
+    # 🖼️ Copy cover image if available
+    cover_file = output_dir / "cover.jpg"
+    if cover_file.exists():
+        shutil.copy(cover_file, singled_dir / "cover.jpg")
+        print("🖼️ Copied cover.jpg to singled/")
+
+    content_data['paragraphs'] = paragraphs
+    content_json.write_text(json.dumps(content_data, indent=4, ensure_ascii=False))
+    print("🖼️ Saved content.json to singled/")
 
 def chapterize_mp3s(content_data: dict, output_dir: Path):
     print("🔍 Scanning MP3 files to merge into chapters...")
 
     chapterized_dir = Path(get_config().get('chapterized_books_folder')) / output_dir.name
-    content_json = chapterized_dir / "content.json";
+    content_json = chapterized_dir / "content.json"
 
     # 🔥 Delete existing chapterized folder
     if chapterized_dir.exists():

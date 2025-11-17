@@ -64,7 +64,8 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
                 chapter_text,  # display text
                 0,  # duration milliseconds
                 0,  # cumulative duration milliseconds,
-                ''  # mp3 file name chapter
+                '',  # mp3 file name chapter
+                ''  # mp3 file name single
             ])
 
             counter += 1
@@ -87,6 +88,7 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
                             clean_text(italics_safe_text, True),
                             0,
                             0,
+                            '',
                             ''
                         ])
                         counter += 1
@@ -103,6 +105,7 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
         "Structure",
         0,
         0,
+        '',
         ''
     ])
 
@@ -118,6 +121,7 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
             cleaned_text,
             0,
             0,
+            '',
             ''
         ])
 
