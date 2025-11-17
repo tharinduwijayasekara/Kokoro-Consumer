@@ -7,8 +7,13 @@
         "level": "INFO",
         "file": "kokoro-consumer.log"
     },
+    "books_folder": "/app/books",
+    "chapterized_books_folder": "/app/books/OratorChapters",
+    "singled_books_folder": "/app/books/Orator",
+    "chapter_paragraph_limit_seconds": 3580,
     "api": {
         "host": "http://host.docker.internal:8888",
+        "host_round_robin": [],
         "endpoints": {
             "speech": "/v1/audio/speech"
         },
@@ -17,17 +22,16 @@
     "tts_settings": {
         "model": "kokoro",
         "input": "<fill the text to be converted to speech>",
-        "--voice": "af_heart+af_sarah+af_bella+ef_dora",
-        "--voice": "af_heart(2)+af_jessica(1)+af_sky(3)",
-        "voice": "af_heart(2)+af_jessica(1)+af_sky(4)",
+        "--voice": "af_heart(4)+af_jessica(1)+af_sky(3)",
+        "voice": "af_heart(5)+af_jessica(2)+af_sky(3)",
         "--voice": "am_michael+am_fenrir+am_michael+bm_lewis",
         "response_format": "mp3",
         "download_format": "mp3",
-        "speed": 1.07,
+        "speed": 1.1,
         "stream": false,
         "return_download_link": true,
         "lang_code": "a",
-        "volume_multiplier": 1,
+        "volume_multiplier": 1.5,
         "normalization_options": {
             "normalize": true,
             "unit_normalization": true,
@@ -63,7 +67,10 @@
         "how're": "howwer",
         "Maxime": "Maxeeme",
         "breathed": "breethed",
-        "Breathed": "Breethed"
+        "Breathed": "Breethed",
+        "cum": " come",
+        "Beth": "Bëth",
+        "beth": "bëth"
     },
     "replacements_edge_tts": {
         " . . . ": "...",
@@ -76,18 +83,50 @@
     },
     "edge_tts_api": {
         "host": "http://host.docker.internal:5050",
+        "host_round_robin": [
+            "http://host.docker.internal:5050",
+            "http://host.docker.internal:5051",
+            "http://host.docker.internal:5052",
+            "http://host.docker.internal:5053",
+            "http://host.docker.internal:5054",
+            "http://host.docker.internal:5055",
+            "http://host.docker.internal:5056",
+            "http://host.docker.internal:5057",
+            "http://host.docker.internal:5058",
+            "http://host.docker.internal:5059",
+            "http://host.docker.internal:5060",
+            "http://host.docker.internal:5061",
+            "http://host.docker.internal:5062",
+            "http://host.docker.internal:5063",
+            "http://host.docker.internal:5064",
+            "http://host.docker.internal:5065",
+            "http://host.docker.internal:5066",
+            "http://host.docker.internal:5067",
+            "http://host.docker.internal:5068",
+            "http://host.docker.internal:5069"
+        ],
         "endpoints": {
             "speech": "/v1/audio/speech"
         },
-        "timeout": 300
+        "timeout": 300,
+        "--prosody_mods": "<speak version='1.0' xml:lang='en-US'><voice name='en-US-AvaNeural'><prosody rate='+7%' pitch='0%' range='-60%'>____TEXT____</prosody></voice></speak>",
+        "prosody_mods": "____TEXT____"
     },
     "edge_tts_settings": {
         "input": "<fill the text to be converted to speech>",
         "voice": "en-US-AvaNeural",
+        "--voice": "en-US-BrianNeural",
+        "--voice": "en-US-AndrewNeural",
         "response_format": "mp3",
-        "speed": 1.07,
-        "model": "tts-1"
+        "speed": 1.05,
+        "model": "tts-1-hd"
     },
     "use_edge_tts_service": false,
-    "batch_size": 5
+    "use_wav_to_mp3": false,
+    "use_get_request": false,
+    "batch_size": 60,
+    "batch_stagger": 150,
+    "-ignore_upto_paragraph": 2500,
+    "-take": 1000,
+    "from_scratch": true
 }

@@ -5,7 +5,6 @@ import json
 import datetime
 import requests
 import re
-import shutil
 
 from ebooklib.epub import EpubBook, EpubItem
 from pydub import AudioSegment
@@ -13,6 +12,8 @@ from pathlib import Path
 from ebooklib import epub
 from bs4 import BeautifulSoup, NavigableString, Tag
 from tqdm import tqdm
+
+from utils import get_config, create_epub
 
 EPUB_DOCUMENT = 9
 
@@ -22,6 +23,7 @@ if not CONFIG_PATH.exists():
 config = json.loads(CONFIG_PATH.read_text())
 
 USE_EDGE_TTS = config.get("use_edge_tts_service", False)
+
 
 def extract_paragraphs_from_epub(epub_path: Path) -> list:
     book = epub.read_epub(str(epub_path))
@@ -55,19 +57,20 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
 
             para_id = f"pgrf-{counter:05d}"
             paragraphs.append([
-                para_id, # id
-                chapter_text_cleaned, # kokoro text
-                1, # is chapter title
-                '', # mp3 file name paragraph
-                chapter_text, # display text
-                0, # duration milliseconds
-                0, # cumulative duration milliseconds,
-                '' # mp3 file name chapter
+                para_id,  # id
+                chapter_text_cleaned,  # kokoro text
+                1,  # is chapter title
+                '',  # mp3 file name paragraph
+                chapter_text,  # display text
+                0,  # duration milliseconds
+                0,  # cumulative duration milliseconds,
+                '',  # mp3 file name chapter
+                ''  # mp3 file name single
             ])
 
             counter += 1
 
-            for p in soup.find_all('p'):
+            for p in soup.find_all(['p', 'li', 'tr', 'dd', 'blockquote']):
                 if found_in_p_tag and p == found_in_p_tag:
                     continue
 
@@ -80,11 +83,12 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
                         paragraphs.append([
                             para_id,
                             clean_text(italics_safe_text),
-                            0,
+                            1 if re.search(r'chapter\s+\d+', cleaned_text.lower()) is not None else 0,
                             '',
                             clean_text(italics_safe_text, True),
                             0,
                             0,
+                            '',
                             ''
                         ])
                         counter += 1
@@ -101,6 +105,7 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
         "Structure",
         0,
         0,
+        '',
         ''
     ])
 
@@ -116,10 +121,21 @@ def extract_paragraphs_from_epub(epub_path: Path) -> list:
             cleaned_text,
             0,
             0,
+            '',
             ''
         ])
 
     print("Chapters:", chapter_texts)
+
+    ignore_upto = get_config().get("ignore_upto_paragraph", 0)
+    take = get_config().get("take", 0)
+
+    if ignore_upto > 0:
+        paragraphs = paragraphs[ignore_upto:]
+
+    if take > 0:
+        paragraphs = paragraphs[:take]
+
     return paragraphs
 
 
@@ -130,11 +146,13 @@ def find_chapter_from_p_tags(soup: BeautifulSoup) -> list:
     for p in soup.find_all('p'):
         p_class = p.get('class', [])
         text = p.get_text().strip()
-        is_chapter = ((
-                'chapter' in p_class
-                or 'section' in p_class
-                or 'CT' in p_class
-                or re.search(r'chapter\s+\d+', text.lower()) is not None)
+        is_chapter = (
+                (
+                        'chapter' in p_class
+                        or 'section' in p_class
+                        or 'CT' in p_class
+                        or re.search(r'chapter\s+\d+', text.lower()) is not None
+                )
                 or re.search(r'[a-zA-Z]{2,}', text))
 
         if is_chapter:
@@ -146,7 +164,7 @@ def find_chapter_from_p_tags(soup: BeautifulSoup) -> list:
 
 
 def is_valid_paragraph(text: str) -> bool:
-    return re.search(r'[A-Za-z0-9.]', text)
+    return re.search(r'[A-Za-z0-9]', text)
 
 
 def clean_text(text: str, for_display: bool = False) -> str:
@@ -158,17 +176,27 @@ def clean_text(text: str, for_display: bool = False) -> str:
         text = fix_word_number_dash(text)  # Fix word-number dash issues
 
         # Apply replacements from config if available
-        replacements = config.get("replacements", {}) if (USE_EDGE_TTS == False) else config.get("replacements_edge_tts", {})
+        replacements = config.get("replacements", {}) if (USE_EDGE_TTS == False) else config.get(
+            "replacements_edge_tts", {})
         if replacements:
             text = apply_replacements(text, replacements)
 
-        text = re.sub(r'\s*\.(\s*\.)+\s*', '... ', text) # Collapse groups of any combo of multiple periods to one "..."
-        text = re.sub(r'^\.\.\.\s', "", text) #Remove leading "... " from text
+        text = re.sub(r'\s*\.(\s*\.)+\s*', '... ',
+                      text)  # Collapse groups of any combo of multiple periods to one "..."
+        text = re.sub(r'^\.\.\.\s', "", text)  # Remove leading "... " from text
 
     return text
 
 
 def apply_replacements(text: str, replacements: dict) -> str:
+    # Go through each replacement, escaping keys to treat them as plain text
+    for key, value in sorted(replacements.items(), key=lambda kv: len(kv[0]), reverse=True):
+        pattern = r'\b{}\b'.format(re.escape(key))
+        text = re.sub(pattern, value, text)
+    return text
+
+
+def apply_replacements_old(text: str, replacements: dict) -> str:
     # Replace all occurrences of keys in `replacements` with their corresponding values in the text.
     for key, value in replacements.items():
         text = text.replace(key, value)
@@ -180,6 +208,7 @@ def fix_word_number_dash(text):
     pattern = r'\b([A-Za-z]+)-(\d+)\b'
     # Replace with word space number
     return re.sub(pattern, r'\1 \2', text)
+
 
 def extract_text_preserve_italics(p):
     parts = []
@@ -193,8 +222,10 @@ def extract_text_preserve_italics(p):
             # Check if this tag (and all its contents) are italic
             is_italic = (
                     elem.name in ['i', 'em'] or
-                    (elem.name == 'span' and any('italic' in cls.lower() for cls in elem.get('class', []))) or
-                    (elem.name == 'span' and any('class_s5fk' in cls.lower() for cls in elem.get('class', [])))
+                    (elem.name == 'span' and any(
+                        'italic' in cls.lower() for cls in elem.get('class', []))) or
+                    (elem.name == 'span' and any(
+                        'class_s5fk' in cls.lower() for cls in elem.get('class', [])))
             )
 
             if is_italic:
@@ -214,9 +245,10 @@ def extract_text_preserve_italics(p):
 
     return processed
 
+
 def extract_text_with_italics(p):
     parts = []
-    detected=False
+    detected = False
 
     print("\n\n\n\n\n\nExtracting text from", p)
 
@@ -240,14 +272,17 @@ def extract_text_with_italics(p):
                             and parts[last_part_idx] != f"*{elem_string}.*"
                     )
             ):
-                print("Parts is not empty, and last part is not: ", f"*{elem_string}*", f"*{elem_string},*", f"*{elem_string}.*")
+                print("Parts is not empty, and last part is not: ", f"*{elem_string}*",
+                      f"*{elem_string},*", f"*{elem_string}.*")
                 parts.append(elem_string)
         elif isinstance(elem, Tag):
 
             is_italic = (
                     elem.name in ['i', 'em'] or
-                    (elem.name == 'span' and any('italic' in cls.lower() for cls in elem.get('class', []))) or
-                    (elem.name == 'span' and any('class_s5fk' in cls.lower() for cls in elem.get('class', [])))
+                    (elem.name == 'span' and any(
+                        'italic' in cls.lower() for cls in elem.get('class', []))) or
+                    (elem.name == 'span' and any(
+                        'class_s5fk' in cls.lower() for cls in elem.get('class', [])))
             )
 
             if is_italic:
@@ -255,7 +290,7 @@ def extract_text_with_italics(p):
                 elem_string = str(elem)
                 print("Part is in italics", [inner, elem_string])
                 parts.append(f"*{inner}*")
-                detected=True
+                detected = True
 
     processed = ''.join(parts).strip()
 
@@ -263,3 +298,14 @@ def extract_text_with_italics(p):
         print("Italics detected: ", p, parts, processed)
 
     return processed
+
+def convert_text_to_epub():
+    current_folder = Path(config.get("books_folder"))
+    text_files = sorted(current_folder.glob("*.txt"))  # sorted for consistent order
+
+    if not text_files:
+        print("📁 No text file found.")
+        return
+
+    for text_file in text_files:
+        create_epub(text_file)

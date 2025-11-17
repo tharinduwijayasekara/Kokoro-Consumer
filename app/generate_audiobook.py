@@ -1,9 +1,14 @@
 import io
 import sys
+import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 
 from mutagen.mp3 import MP3
 
+from text_processor import convert_text_to_epub
+from endpoint import get_endpoint_from_round_robin
+from utils import get_config
 from text_processor import extract_paragraphs_from_epub
 
 sys.stdout.reconfigure(line_buffering=True)
@@ -19,11 +24,7 @@ from pydub import AudioSegment
 from pathlib import Path
 from ebooklib import epub
 
-# Load config
-CONFIG_PATH = Path("/app/config.json")
-if not CONFIG_PATH.exists():
-    raise FileNotFoundError("Missing config.json file.")
-config = json.loads(CONFIG_PATH.read_text())
+config = get_config()
 
 KOKORO_ENDPOINT = config["api"]["host"] + config["api"]["endpoints"]["speech"]
 TTS_SETTINGS = config.get("tts_settings", {})
@@ -33,18 +34,30 @@ EPUB_IMAGE = 1
 EPUB_IMAGE_2 = 10
 
 EDGE_TTS_ENDPOINT = config["edge_tts_api"]["host"] + config["edge_tts_api"]["endpoints"]["speech"]
+EDGE_TTS_PROSODY_MODS = config["edge_tts_api"]["prosody_mods"]
+EDGE_TTS_HOST_ROUND_ROBIN = config['edge_tts_api']['host_round_robin']
 EDGE_TTS_SETTINGS = config.get("edge_tts_settings", {})
 USE_EDGE_TTS = config.get("use_edge_tts_service", False)
+EDGE_TTS_VOICE = EDGE_TTS_SETTINGS.get("voice")
+EDGE_TTS_VOICE2 = EDGE_TTS_SETTINGS.get("voice2", EDGE_TTS_VOICE)
 
-BATCH_SIZE = config.get("batch_size", 5)
+USE_WAV_TO_MP3 = config.get("use_wav_to_mp3", False)
+USE_GET_REQUEST = config.get("use_get_request", False)
 
+BATCH_SIZE = config.get("batch_size", 5) if USE_EDGE_TTS else 5
+BATCH_STAGGER = config.get("batch_stagger", 250) if USE_EDGE_TTS else 500
+
+ROUND_ROBIN_INDEX_REF = {
+    "current": 0
+}
 
 def main():
+    convert_text_to_epub()
     convert_epubs_to_audiobooks()
 
 
 def convert_epubs_to_audiobooks():
-    current_folder = Path("/app/books")
+    current_folder = Path(config.get("books_folder"))
     epub_files = list(current_folder.glob("*.epub"))
 
     if not epub_files:
@@ -57,7 +70,7 @@ def convert_epubs_to_audiobooks():
 
 def convert_epub_to_audiobook(epub_file: epub):
     start_time = datetime.datetime.now()
-    current_folder = Path("/app/books")
+    current_folder = Path(config.get("books_folder")) / "Processing"
 
     output_dir, timestamp = prepare_output_dir(current_folder, epub_file)
 
@@ -109,16 +122,23 @@ def convert_epub_to_audiobook(epub_file: epub):
             remaining -= 1
             continue
 
-        generate_audio_from_text(paragraph[1], audio_file_path)
+        batch.append((paragraph, text_content, audio_file_path, (BATCH_STAGGER * len(batch))))
+        batch_size = len(batch)
 
-        current += 1
+        if batch_size < BATCH_SIZE:
+            continue
+
+        process_audio_batch(batch)
+        batch = []
+
+        current += batch_size
         elapsed_time = datetime.datetime.now() - start_time
         time_left = (elapsed_time / current) * (remaining - current)
         completed = total - remaining + current
         percent = round((completed / total) * 100)
 
         print(
-            f"🔊 {audio_file} ({completed}/{total}) ({percent}%) duration: {seconds_to_hms(cumulative_duration / 1000)} - Elapsed: {elapsed_time} | Estimated time left: {time_left} | {remaining} at start")
+            f"🔊 {audio_file} ({completed}/{total}) (batch size:{batch_size}) ({percent}%) duration: {seconds_to_hms(cumulative_duration / 1000)} - Elapsed: {elapsed_time} | Estimated time left: {time_left} | {remaining} at start")
         print("=" * os.get_terminal_size().columns)
         term_width = os.get_terminal_size().columns
         bar_length = term_width - 8  # Reserve space for " 100%" and brackets
@@ -127,6 +147,10 @@ def convert_epub_to_audiobook(epub_file: epub):
         bar = '█' * filled_length + '-' * (bar_length - filled_length)
         print(f"<{bar}> {percent}%")
         print("=" * os.get_terminal_size().columns)
+
+    batch_size = len(batch)
+    if batch_size > 0:
+        process_audio_batch(batch)
 
     paragraphs = compute_durations(output_dir, paragraphs)
 
@@ -141,23 +165,54 @@ def convert_epub_to_audiobook(epub_file: epub):
     if "--chapterize" in sys.argv:
         print("📚 Chapterizing MP3 files...")
         chapterize_mp3s(content_data, output_dir)
+        print("📚 Singling MP3 files...")
+        single_mp3(content_data, output_dir)
 
     print("🎉 Done!")
 
+
+def process_audio_batch(batch) -> int:
+    with ThreadPoolExecutor(max_workers=len(batch)) as executor:
+        future_to_para = {
+            executor.submit(generate_audio_from_text, text, path, stagger):
+                (para, path) for para, text, path, stagger in batch
+        }
+
+        for future in as_completed(future_to_para):
+            para, path = future_to_para[future]
+
+    return len(batch)
+
+
 def compute_durations(output_dir: Path, paragraphs: list) -> list:
     cumulative_duration = 0
+    chapter_duration = 0
+
+    prev_paragraph = None
 
     for paragraph in paragraphs:
         audio_file_path = Path(output_dir / paragraph[3])
 
         if audio_file_path.exists() and audio_file_path.stat().st_size > 0:
+            if paragraph[2] == 1 or (chapter_duration/1000) >= config.get("chapter_paragraph_limit_seconds"):
+                paragraph[2] = 1
+                chapter_duration = 0
+
+            if prev_paragraph != None and paragraph[2] != 1 and prev_paragraph[2] != 1 and "chapter:" in paragraph[1].lower():
+                paragraph[2] = 1
+                chapter_duration = 0
+
             duration = get_mp3_duration(audio_file_path)
             cumulative_duration = cumulative_duration + duration
+            chapter_duration = chapter_duration + duration
+
             print(
-                f"✅ Computing cumulative duration: {audio_file_path} {seconds_to_hms(duration / 1000)} {seconds_to_hms(cumulative_duration / 1000)}")
+                f"✅ Computing cumulative duration: {audio_file_path} Duration: {seconds_to_hms(duration / 1000)} Chapter Duration: {seconds_to_hms(chapter_duration / 1000)} Total Duration: {seconds_to_hms(cumulative_duration / 1000)}")
 
             paragraph[5] = duration
             paragraph[6] = cumulative_duration
+
+            prev_paragraph = paragraph
 
     return paragraphs
 
@@ -179,28 +234,24 @@ def prepare_output_dir(current_folder: Path, epub_file: epub.EpubBook) -> list:
     base_name = base_name.strip('-')  # Remove leading/trailing dashes
 
     if USE_EDGE_TTS:
-        base_name = f"{base_name}_edge_tts"
+        base_name = f"{base_name}_[E]"
 
     print(f"📂 Cleaned base name: {base_name}")
 
     output_dir = current_folder / base_name
 
-    if output_dir.exists():
-        mp3_files = list(output_dir.glob("*.mp3"))
-        if mp3_files:
-            # Sort by last modified time (most recent last)
-            latest_mp3 = max(mp3_files, key=lambda f: f.stat().st_mtime)
-            try:
-                latest_mp3.unlink()
-                print(f"🗑️ Deleted latest MP3: {latest_mp3.name}")
-            except Exception as e:
-                print(f"⚠️ Failed to delete {latest_mp3.name}: {e}")
+    if output_dir.exists() and get_config().get("from_scratch", False):
+        print(f"🧹 Removing existing folder: {output_dir}")
+        shutil.rmtree(output_dir)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     return [output_dir, timestamp]
 
 
-def generate_audio_from_text(text: str, output_path: Path):
+def generate_audio_from_text(text: str, output_path: Path, stagger: int):
+    global ROUND_ROBIN_INDEX_REF
+
+    time.sleep(stagger/1000)
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             params = TTS_SETTINGS
@@ -209,6 +260,14 @@ def generate_audio_from_text(text: str, output_path: Path):
             params = edge_tts_params if USE_EDGE_TTS else params
 
             text = convert_all_caps_to_sentence_case(text)
+
+            if (USE_EDGE_TTS):
+                text = EDGE_TTS_PROSODY_MODS.replace("____TEXT____", text)
+                params.update({"voice": EDGE_TTS_VOICE})
+
+                if "'" in text or '"' in text:
+                    params.update({"voice": EDGE_TTS_VOICE2})
+
             params.update({"input": text})
             params.update({"text": text})
 
@@ -217,16 +276,29 @@ def generate_audio_from_text(text: str, output_path: Path):
                 "Content-Type": "application/json"
             }
 
-            endpoint = KOKORO_ENDPOINT
-            endpoint = EDGE_TTS_ENDPOINT if USE_EDGE_TTS else endpoint
+            endpoint = get_endpoint_from_round_robin(config, ROUND_ROBIN_INDEX_REF)
 
             print(
-                f"🔊 Sending request: {endpoint} | voice: {params.get('voice', '')} | speed: {params.get('speed', '')} | input: {params.get('input', '')[:60]}")
+                f"🔊 Sending request: {endpoint} | RR Index: {ROUND_ROBIN_INDEX_REF.get('current')} | voice: {params.get('voice', '')[:15]} | speed: {params.get('speed', '')} | input: {params.get('input', '')[:60]}")
 
-            response = requests.post(endpoint, json=params, headers=headers, timeout=300)
+            if USE_GET_REQUEST:
+                query_string = urllib.parse.urlencode(params)
+                full_url = f"{endpoint}?{query_string}"
+                response = requests.get(full_url, timeout=300)
+            else:
+                response = requests.post(endpoint, json=params, headers=headers, timeout=300)
+
             response.raise_for_status()
+            response_bytes = response.content
 
-            audio = MP3(io.BytesIO(response.content))
+            if USE_WAV_TO_MP3:
+                wav_data = io.BytesIO(response_bytes)
+                audio = AudioSegment.from_wav(wav_data)
+                mp3_io = io.BytesIO()
+                audio.export(mp3_io, format="mp3")
+                response_bytes = mp3_io.getvalue()
+
+            audio = MP3(io.BytesIO(response_bytes))
             duration = int(audio.info.length * 1000)
 
             silence_ms = 200
@@ -234,7 +306,7 @@ def generate_audio_from_text(text: str, output_path: Path):
             if duration > 10000: silence_ms = 500
             if duration > 15000: silence_ms = 700
 
-            final_mp3 = add_silence_with_pydub(response.content, silence_ms)
+            final_mp3 = add_silence_with_pydub(response_bytes, silence_ms)
 
             with open(output_path, 'wb') as f:
                 f.write(final_mp3)
@@ -312,14 +384,55 @@ def extract_cover_image(epub_path: Path, output_dir: Path) -> Path | None:
             return cover_image_path
 
     print("❌ No cover image found in EPUB.")
+    shutil.copyfile(Path('/app/app/assets/cover.jpg'), cover_image_path)
+
     return None
 
+def single_mp3(content_data: dict, output_dir: Path):
+    print("🔍 Scanning MP3 files to merge into single...")
+
+    singled_dir = Path(get_config().get('singled_books_folder')) / output_dir.name
+    content_json = singled_dir / "content.json"
+    single_audio_name = 'output.mp3'
+
+    # 🔥 Delete existing chapterized folder
+    if singled_dir.exists():
+        print(f"🧹 Removing existing folder: {singled_dir}")
+        shutil.rmtree(singled_dir)
+
+    singled_dir.mkdir(parents=True, exist_ok=True)
+
+    paragraphs = content_data['paragraphs']
+    if not paragraphs:
+        print("❌ No paragraphs found to merge. Nothing to do.")
+        return
+
+    mp3s_to_merge = []
+
+    for paragraph in paragraphs:
+        para_id = paragraph[0]
+        mp3_file_name = paragraph[3]
+        mp3_file_path = output_dir / mp3_file_name
+        mp3s_to_merge.append(mp3_file_path)
+        paragraph[8] = single_audio_name
+
+    ffmpeg_concat_mp3s(mp3s_to_merge, singled_dir/single_audio_name)
+
+    # 🖼️ Copy cover image if available
+    cover_file = output_dir / "cover.jpg"
+    if cover_file.exists():
+        shutil.copy(cover_file, singled_dir / "cover.jpg")
+        print("🖼️ Copied cover.jpg to singled/")
+
+    content_data['paragraphs'] = paragraphs
+    content_json.write_text(json.dumps(content_data, indent=4, ensure_ascii=False))
+    print("🖼️ Saved content.json to singled/")
 
 def chapterize_mp3s(content_data: dict, output_dir: Path):
     print("🔍 Scanning MP3 files to merge into chapters...")
 
-    chapterized_dir = output_dir / output_dir.name
-    content_json = chapterized_dir / "content.json";
+    chapterized_dir = Path(get_config().get('chapterized_books_folder')) / output_dir.name
+    content_json = chapterized_dir / "content.json"
 
     # 🔥 Delete existing chapterized folder
     if chapterized_dir.exists():
