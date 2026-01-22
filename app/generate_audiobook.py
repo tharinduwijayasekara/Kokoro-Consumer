@@ -44,8 +44,8 @@ EDGE_TTS_VOICE2 = EDGE_TTS_SETTINGS.get("voice2", EDGE_TTS_VOICE)
 USE_WAV_TO_MP3 = config.get("use_wav_to_mp3", False)
 USE_GET_REQUEST = config.get("use_get_request", False)
 
-BATCH_SIZE = config.get("batch_size", 5) if USE_EDGE_TTS else 5
-BATCH_STAGGER = config.get("batch_stagger", 250) if USE_EDGE_TTS else 500
+BATCH_SIZE = config.get("batch_size", 5) if USE_EDGE_TTS else 3
+BATCH_STAGGER = config.get("batch_stagger", 250) if USE_EDGE_TTS else 100
 
 ROUND_ROBIN_INDEX_REF = {
     "current": 0
