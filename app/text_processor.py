@@ -24,6 +24,112 @@ config = json.loads(CONFIG_PATH.read_text())
 
 USE_EDGE_TTS = config.get("use_edge_tts_service", False)
 
+def extract_paragraphs_from_epub_simpler(epub_path: Path) -> list:
+    book = epub.read_epub(str(epub_path))
+    paragraphs = []
+    counter = 1
+    section_counter = 1
+    chapter_texts = []
+
+    for item in book.get_items():
+
+        if item.get_type() == EPUB_DOCUMENT:
+
+            soup = BeautifulSoup(item.get_content(), 'html.parser')
+            full_text = soup.get_text().strip()
+            if len(full_text) == 0:
+                continue
+
+            chapter_text = ''
+            all_paragraphs = full_text.splitlines()
+            for paragraph_text in all_paragraphs:
+                cleaned_text = clean_text(paragraph_text)
+                if not is_valid_paragraph(cleaned_text):
+                    continue
+
+                para_id = f"pgrf-{counter:05d}"
+
+                if chapter_text == '':
+                    chapter_text = paragraph_text
+                    chapter_text_cleaned = cleaned_text
+                    chapter_texts.append(chapter_text)
+                    paragraphs.append([
+                        para_id,  # id
+                        chapter_text_cleaned,  # kokoro text
+                        1,  # is chapter title
+                        '',  # mp3 file name paragraph
+                        chapter_text,  # display text
+                        0,  # duration milliseconds
+                        0,  # cumulative duration milliseconds,
+                        '',  # mp3 file name chapter
+                        ''  # mp3 file name single
+                    ])
+
+                    counter += 1
+                else:
+                    paragraphs.append([
+                        para_id,
+                        cleaned_text,
+                        1 if re.search(r'chapter\s+\d+', cleaned_text.lower()) is not None else 0,
+                        '',
+                        clean_text(paragraph_text, True),
+                        0,
+                        0,
+                        '',
+                        ''
+                    ])
+
+                    counter += 1
+
+    chapter_texts.append("Structure")
+
+    para_id = f"pgrf-{counter:05d}"
+    paragraphs.append([
+        para_id,
+        "Structure",
+        1,
+        '',
+        "Structure",
+        0,
+        0,
+        '',
+        ''
+    ])
+
+    counter += 1
+
+    for item in book.get_items_of_type(EPUB_DOCUMENT):
+
+        para_id = f"pgrf-{counter:05d}"
+        cleaned_text = clean_text(item.get_name())
+        paragraphs.append([
+            para_id,
+            cleaned_text,
+            0,
+            '',
+            cleaned_text,
+            0,
+            0,
+            '',
+            ''
+        ])
+
+        counter += 1
+
+    print("Chapters:", chapter_texts)
+
+    ignore_upto = get_config().get("ignore_upto_paragraph", 0)
+    take = get_config().get("take", 0)
+
+    if ignore_upto > 0:
+        paragraphs = paragraphs[ignore_upto:]
+
+    if take > 0:
+        paragraphs = paragraphs[:take]
+
+    print(paragraphs)
+
+    return paragraphs
 
 def extract_paragraphs_from_epub(epub_path: Path) -> list:
     book = epub.read_epub(str(epub_path))

@@ -6,6 +6,7 @@ from io import BytesIO
 
 from mutagen.mp3 import MP3
 
+from text_processor import extract_paragraphs_from_epub_simpler
 from text_processor import convert_text_to_epub
 from endpoint import get_endpoint_from_round_robin
 from utils import get_config
@@ -44,8 +45,8 @@ EDGE_TTS_VOICE2 = EDGE_TTS_SETTINGS.get("voice2", EDGE_TTS_VOICE)
 USE_WAV_TO_MP3 = config.get("use_wav_to_mp3", False)
 USE_GET_REQUEST = config.get("use_get_request", False)
 
-BATCH_SIZE = config.get("batch_size", 5) if USE_EDGE_TTS else 3
-BATCH_STAGGER = config.get("batch_stagger", 250) if USE_EDGE_TTS else 100
+BATCH_SIZE = config.get("batch_size", 5) if USE_EDGE_TTS else 20
+BATCH_STAGGER = config.get("batch_stagger", 250) if USE_EDGE_TTS else 200
 
 ROUND_ROBIN_INDEX_REF = {
     "current": 0
@@ -79,7 +80,7 @@ def convert_epub_to_audiobook(epub_file: epub):
 
     extract_cover_image(epub_file, output_dir)
 
-    paragraphs = extract_paragraphs_from_epub(epub_file)
+    paragraphs = extract_paragraphs_from_epub_simpler(epub_file)
     content_json = output_dir / "content.json"
 
     print("📝 Paragraphs extracted:")
