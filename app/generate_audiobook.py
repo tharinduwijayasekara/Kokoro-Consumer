@@ -296,7 +296,7 @@ def generate_audio_from_text(text: str, output_path: Path, stagger: int):
                 wav_data = io.BytesIO(response_bytes)
                 audio = AudioSegment.from_wav(wav_data)
                 mp3_io = io.BytesIO()
-                audio.export(mp3_io, format="mp3")
+                audio.export(mp3_io, format="mp3", bitrate="320k")
                 response_bytes = mp3_io.getvalue()
 
             audio = MP3(io.BytesIO(response_bytes))
@@ -336,7 +336,7 @@ def add_silence_with_pydub(mp3_data: bytes, silence_duration_ms: int) -> bytes:
     silence = AudioSegment.silent(duration=silence_duration_ms)
     combined = original_audio + silence
     out_buf = BytesIO()
-    combined.export(out_buf, format="mp3")
+    combined.export(out_buf, format="mp3", bitrate="320k")
     return out_buf.getvalue()
 
 
