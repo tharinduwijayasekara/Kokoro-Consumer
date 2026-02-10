@@ -45,8 +45,8 @@ EDGE_TTS_VOICE2 = EDGE_TTS_SETTINGS.get("voice2", EDGE_TTS_VOICE)
 USE_WAV_TO_MP3 = config.get("use_wav_to_mp3", False)
 USE_GET_REQUEST = config.get("use_get_request", False)
 
-BATCH_SIZE = config.get("batch_size", 5) if USE_EDGE_TTS else 200
-BATCH_STAGGER = config.get("batch_stagger", 250) if USE_EDGE_TTS else 500
+BATCH_SIZE = config.get("batch_size", 5) if USE_EDGE_TTS else 10
+BATCH_STAGGER = config.get("batch_stagger", 250) if USE_EDGE_TTS else 10
 
 ROUND_ROBIN_INDEX_REF = {
     "current": 0
@@ -164,8 +164,8 @@ def convert_epub_to_audiobook(epub_file: epub):
     content_json.write_text(json.dumps(content_data, indent=4, ensure_ascii=False))
 
     if "--chapterize" in sys.argv:
-        print("📚 Chapterizing MP3 files...")
-        chapterize_mp3s(content_data, output_dir)
+        #print("📚 Chapterizing MP3 files...")
+        #chapterize_mp3s(content_data, output_dir)
         print("📚 Singling MP3 files...")
         single_mp3(content_data, output_dir)
 

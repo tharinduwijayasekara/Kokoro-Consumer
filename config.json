@@ -13,20 +13,22 @@
     "chapter_paragraph_limit_seconds": 3580,
     "api": {
         "host": "http://host.docker.internal:8888",
+        "--host": "http://host.docker.internal:49112",
         "host_round_robin": [],
         "endpoints": {
             "speech": "/v1/audio/speech"
         },
         "timeout": 300
     },
+    "----kokoro--tts----":"",
     "tts_settings": {
         "model": "kokoro",
         "input": "<fill the text to be converted to speech>",
         "--voice": "af_heart(2)+af_alloy(2)+af_jessica(1)+af_nicole(1)+af_jadzia(1)+af_nova(1)",
         "voice": "af_heart(2)+af_sky(2)+bm_lewis(1)",
         "--voice": "am_echo(7)+am_onyx(2)+am_puck(1)",
-        "response_format": "wav",
-        "download_format": "wav",
+        "response_format": "mp3",
+        "download_format": "mp3",
         "speed": 1.17,
         "stream": false,
         "return_download_link": true,
@@ -40,6 +42,12 @@
             "phone_normalization": false,
             "replace_remaining_symbols": true
         }
+    },
+    "----pocket--tts----":"",
+    "--tts_settings": {
+        "input": "Hello world!",
+        "voice": "D:\\Apps\\VoiceSamples\\00_sarah.wav",
+        "response_format": "mp3"
     },
     "replacements": {
         " . . . ": "...",
@@ -124,7 +132,7 @@
         "model": "tts-1-hd"
     },
     "use_edge_tts_service": false,
-    "use_wav_to_mp3": true,
+    "use_wav_to_mp3": false,
     "use_get_request": false,
     "batch_size": 60,
     "batch_stagger": 150,
