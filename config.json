@@ -11,6 +11,17 @@
     "chapterized_books_folder": "/app/books/OratorChapters",
     "singled_books_folder": "/app/books/Orator",
     "chapter_paragraph_limit_seconds": 3580,
+    "use_wav_to_mp3": false,
+    "use_get_request": false,
+    "batch_size": 60,
+    "batch_stagger": 150,
+    "--ignore_upto_paragraph": 1400,
+    "--take": 600,
+    "from_scratch": true,
+    "add_structure": false,
+
+    "=== KOKORO AND EDGE (AND OTHER) API RELATED SETTINGS": " GO BELOW ===",
+
     "api": {
         "host": "http://host.docker.internal:8888",
         "--host": "http://host.docker.internal:49112",
@@ -25,11 +36,12 @@
         "model": "kokoro",
         "input": "<fill the text to be converted to speech>",
         "--voice": "af_heart(2)+af_alloy(2)+af_jessica(1)+af_nicole(1)+af_jadzia(1)+af_nova(1)",
-        "voice": "af_heart(2)+af_sky(2)+bm_lewis(1)",
+        "--voice": "af_heart(2)+af_sky(2)+bm_lewis(1)",
+        "voice": "af_heart(1)+af_aoede(1)+af_nicole(1)+af_sky(1)",
         "--voice": "am_echo(7)+am_onyx(2)+am_puck(1)",
         "response_format": "mp3",
         "download_format": "mp3",
-        "speed": 1.17,
+        "speed": 1.2,
         "stream": false,
         "return_download_link": true,
         "lang_code": "a",
@@ -131,12 +143,5 @@
         "speed": 1.05,
         "model": "tts-1-hd"
     },
-    "use_edge_tts_service": false,
-    "use_wav_to_mp3": false,
-    "use_get_request": false,
-    "batch_size": 60,
-    "batch_stagger": 150,
-    "--ignore_upto_paragraph": 1400,
-    "--take": 600,
-    "from_scratch": true
+    "use_edge_tts_service": false
 }

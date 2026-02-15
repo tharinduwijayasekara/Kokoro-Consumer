@@ -23,6 +23,7 @@ if not CONFIG_PATH.exists():
 config = json.loads(CONFIG_PATH.read_text())
 
 USE_EDGE_TTS = config.get("use_edge_tts_service", False)
+ADD_STRUCTURE = config.get("add_structure", False)
 
 def extract_paragraphs_from_epub_simpler(epub_path: Path) -> list:
     book = epub.read_epub(str(epub_path))
@@ -81,33 +82,19 @@ def extract_paragraphs_from_epub_simpler(epub_path: Path) -> list:
 
                     counter += 1
 
-    chapter_texts.append("Structure")
+    if ADD_STRUCTURE == True: 
 
-    para_id = f"pgrf-{counter:05d}"
-    paragraphs.append([
-        para_id,
-        "Structure",
-        1,
-        '',
-        "Structure",
-        0,
-        0,
-        '',
-        ''
-    ])
-
-    counter += 1
-
-    for item in book.get_items_of_type(EPUB_DOCUMENT):
+        # Structure section start 
+        
+        chapter_texts.append("Structure")
 
         para_id = f"pgrf-{counter:05d}"
-        cleaned_text = clean_text(item.get_name())
         paragraphs.append([
             para_id,
-            cleaned_text,
-            0,
+            "Structure",
+            1,
             '',
-            cleaned_text,
+            "Structure",
             0,
             0,
             '',
@@ -115,6 +102,26 @@ def extract_paragraphs_from_epub_simpler(epub_path: Path) -> list:
         ])
 
         counter += 1
+
+        for item in book.get_items_of_type(EPUB_DOCUMENT):
+
+            para_id = f"pgrf-{counter:05d}"
+            cleaned_text = clean_text(item.get_name())
+            paragraphs.append([
+                para_id,
+                cleaned_text,
+                0,
+                '',
+                cleaned_text,
+                0,
+                0,
+                '',
+                ''
+            ])
+
+            counter += 1
+
+        # Structure section end
 
     print("Chapters:", chapter_texts)
 
